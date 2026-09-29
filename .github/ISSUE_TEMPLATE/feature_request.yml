@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an improvement to Jervis
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation or workflow would this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Audio
+        - Wake word
+        - Speech recognition
+        - Speaker identity
+        - TTS
+        - Brain / OpenClaw
+        - Skills / MCP
+        - Control Deck
+        - Permissions
+        - Reliability
+        - Documentation
+        - Other

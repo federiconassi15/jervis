@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "assistant": {
+    "name": "Jervis",
+    "wake_words": ["jervis"],
+    "wake_acknowledgement": "Boss?"
+  },
+  "audio": {
+    "input_source": "auto",
+    "output_sink": "auto",
+    "sample_rate_hz": 16000,
+    "aec_enabled": true,
+    "auto_gain": true
+  },
+  "speech": {
+    "language": "en",
+    "tts_voice": "en-GB-RyanNeural",
+    "tts_rate": "+4%",
+    "barge_in": true,
+    "follow_up_seconds": 10
+  },
+  "identity": {
+    "enabled": true,
+    "trusted_session_seconds": 14400,
+    "inactivity_timeout_seconds": 1800,
+    "retry_before_authentication": true,
+    "continuous_learning": true,
+    "store_raw_audio": false
+  },
+  "brain": {
+    "provider": "openclaw",
+    "endpoint": "local",
+    "timeout_seconds": 30
+  },
+  "privacy": {
+    "persist_dialogue": true,
+    "persist_raw_audio": false,
+    "redact_authentication_events": true
+  },
+  "control_deck": {
+    "enabled": true,
+    "refresh_interval_seconds": 1
+  }
+}
