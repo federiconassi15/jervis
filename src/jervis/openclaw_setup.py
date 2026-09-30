@@ -54,17 +54,16 @@ def find_openclaw() -> Path | None:
     return next((path for path in candidates if path.exists()), None)
 
 
-def _command(cli: Path, *args: str) -> list[str]:
-    if platform.system() == "Windows" and cli.suffix.lower() in {".cmd", ".bat"}:
-        return ["cmd", "/d", "/s", "/c", str(cli), *args]
-    return [str(cli), *args]
-
-
 def run(cli: Path, *args: str, interactive: bool = True) -> subprocess.CompletedProcess[str]:
     kwargs = {"check": False, "text": True}
     if not interactive:
         kwargs["capture_output"] = True
-    return subprocess.run(_command(cli, *args), **kwargs)
+
+    if platform.system() == "Windows" and cli.suffix.lower() in {".cmd", ".bat"}:
+        command = subprocess.list2cmdline([str(cli), *args])
+        return subprocess.run(command, shell=True, **kwargs)
+
+    return subprocess.run([str(cli), *args], **kwargs)
 
 
 def install_official(progress: Progress) -> Path:
@@ -151,7 +150,9 @@ def configure(cli: Path, mode: str, choose: Callable[[str, list[str], int], int]
         )
         if proc.returncode != 0:
             raise RuntimeError("OpenAI/Codex authentication did not complete")
-        run(cli, "gateway", "install", interactive=True)
+        gateway = run(cli, "gateway", "install", interactive=True)
+        if gateway.returncode != 0:
+            raise RuntimeError("OpenClaw gateway service installation failed")
         return
 
     if choice == 1:
