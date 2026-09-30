@@ -18,7 +18,7 @@ TEXT_SUFFIXES = {
     ".py", ".md", ".json", ".toml", ".yml", ".yaml", ".txt",
     ".sh", ".ps1", ".cmd", ".ini", ".cfg",
 }
-CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
+CONFLICT_RE = re.compile(r"(?m)^(<<<<<<<|=======|>>>>>>>)")
 
 
 def fail(path: pathlib.Path, message: str) -> None:
@@ -48,9 +48,9 @@ for path in tracked:
     if controls:
         fail(path, "unexpected control bytes: " + repr(controls))
 
-    for marker in CONFLICT_MARKERS:
-        if marker in text:
-            fail(path, "unresolved merge-conflict marker " + marker)
+    match = CONFLICT_RE.search(text)
+    if match:
+        fail(path, "unresolved merge-conflict marker " + match.group(1))
 
     try:
         if path.suffix == ".py":
