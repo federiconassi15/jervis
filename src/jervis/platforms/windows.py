@@ -65,10 +65,9 @@ class WindowsPlatform(PlatformAdapter):
         wrapper.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
 
         action = (
-            "$a=New-ScheduledTaskAction -Execute 'cmd.exe' "
-            "-Argument '/d /s /c """
-            + str(wrapper).replace("'", "''")
-            + """';"
+            "$wrapper=" + _ps_quote(str(wrapper)) + ";"
+            "$argument='/d /s /c \"' + $wrapper + '\"';"
+            "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $argument;"
         )
         if mode == "server":
             trigger = "$t=New-ScheduledTaskTrigger -AtStartup;"
@@ -104,7 +103,6 @@ class WindowsPlatform(PlatformAdapter):
             + " -Confirm:$false -ErrorAction SilentlyContinue"
         )
         self._powershell(script)
-        # Remove any service wrapper from the currently installed Jervis launcher directory.
         install_root = os.environ.get("JERVIS_INSTALL_ROOT")
         if install_root:
             (Path(install_root) / "bin" / "jervis-service.cmd").unlink(missing_ok=True)
