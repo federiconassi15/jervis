@@ -284,7 +284,7 @@ def install() -> None:
             except Exception:
                 pass
             if not existing_service:
-                adapter.install_service(resolve_launcher(), {"JERVIS_HOME": str(paths.root)})
+                adapter.install_service(resolve_launcher(), paths.service_environment(), mode=mode)
                 transaction.mark_service_changed()
 
         transaction.commit()

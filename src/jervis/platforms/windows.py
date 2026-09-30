@@ -1,14 +1,142 @@
+from __future__ import annotations
+
+import os
 import subprocess
-from .base import PlatformAdapter
+from pathlib import Path
+
+from .base import PlatformAdapter, PlatformCapabilities
 from ..models import Health
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 class WindowsPlatform(PlatformAdapter):
-    task_name="Jervis Voice Assistant"
-    def install_service(self,executable,env):
-        del env
-        command='"'+str(executable)+'" run'
-        subprocess.run(["schtasks","/Create","/F","/SC","ONLOGON","/TN",self.task_name,"/TR",command],check=True)
-        subprocess.run(["schtasks","/Run","/TN",self.task_name],check=False)
-    def remove_service(self):subprocess.run(["schtasks","/Delete","/F","/TN",self.task_name],check=False)
-    def service_health(self):
-        p=subprocess.run(["schtasks","/Query","/TN",self.task_name],text=True,capture_output=True,check=False)
-        return Health(p.returncode==0,"service",p.stdout.strip() or p.stderr.strip())
+    task_name = "Jervis Voice Assistant"
+
+    def capabilities(self) -> PlatformCapabilities:
+        return PlatformCapabilities(
+            name="windows",
+            desktop_startup="Task Scheduler at logon",
+            server_startup="Task Scheduler at startup as SYSTEM",
+            audio_backend="WASAPI / DirectSound / MME through PortAudio",
+        )
+
+    def _powershell(
+        self,
+        script: str,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                "powershell",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                script,
+            ],
+            text=True,
+            capture_output=True,
+            check=check,
+        )
+
+    def wrapper(self, executable: Path) -> Path:
+        return executable.parent / "jervis-service.cmd"
+
+    def install_service(
+        self,
+        executable: Path,
+        env: dict[str, str],
+        mode: str = "desktop",
+    ) -> None:
+        if mode not in {"desktop", "server"}:
+            raise ValueError("mode must be desktop or server")
+
+        wrapper = self.wrapper(executable)
+        lines = ["@echo off"]
+        for key, value in sorted(env.items()):
+            safe_value = str(value).replace("%", "%%").replace('"', '""')
+            lines.append('set "' + str(key) + "=" + safe_value + '"')
+        lines.append('call "' + str(executable) + '" run')
+        wrapper.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+
+        action = (
+            "$a=New-ScheduledTaskAction -Execute 'cmd.exe' "
+            "-Argument '/d /s /c """
+            + str(wrapper).replace("'", "''")
+            + """';"
+        )
+        if mode == "server":
+            trigger = "$t=New-ScheduledTaskTrigger -AtStartup;"
+            principal = (
+                "$p=New-ScheduledTaskPrincipal -UserId 'SYSTEM' "
+                "-LogonType ServiceAccount -RunLevel Highest;"
+            )
+        else:
+            trigger = "$t=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
+            principal = (
+                "$p=New-ScheduledTaskPrincipal -UserId $env:USERNAME "
+                "-LogonType Interactive -RunLevel Limited;"
+            )
+
+        settings = (
+            "$s=New-ScheduledTaskSettingsSet "
+            "-RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) "
+            "-ExecutionTimeLimit ([TimeSpan]::Zero) "
+            "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries;"
+        )
+        register = (
+            "Register-ScheduledTask -TaskName "
+            + _ps_quote(self.task_name)
+            + " -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null;"
+        )
+        self._powershell(action + trigger + principal + settings + register, check=True)
+        self.start_service()
+
+    def remove_service(self) -> None:
+        script = (
+            "Unregister-ScheduledTask -TaskName "
+            + _ps_quote(self.task_name)
+            + " -Confirm:$false -ErrorAction SilentlyContinue"
+        )
+        self._powershell(script)
+        # Remove any service wrapper from the currently installed Jervis launcher directory.
+        install_root = os.environ.get("JERVIS_INSTALL_ROOT")
+        if install_root:
+            (Path(install_root) / "bin" / "jervis-service.cmd").unlink(missing_ok=True)
+
+    def service_health(self) -> Health:
+        script = (
+            "$task=Get-ScheduledTask -TaskName "
+            + _ps_quote(self.task_name)
+            + " -ErrorAction SilentlyContinue;"
+            "if($null -eq $task){exit 3};"
+            "$info=Get-ScheduledTaskInfo -TaskName "
+            + _ps_quote(self.task_name)
+            + ";"
+            "Write-Output ($task.State.ToString() + ' / LastResult=' + $info.LastTaskResult);"
+            "exit 0"
+        )
+        proc = self._powershell(script)
+        detail = proc.stdout.strip() or proc.stderr.strip() or "not installed"
+        return Health(proc.returncode == 0, "service", detail)
+
+    def start_service(self) -> None:
+        script = (
+            "Start-ScheduledTask -TaskName "
+            + _ps_quote(self.task_name)
+            + " -ErrorAction Stop"
+        )
+        self._powershell(script, check=True)
+
+    def stop_service(self) -> None:
+        script = (
+            "Stop-ScheduledTask -TaskName "
+            + _ps_quote(self.task_name)
+            + " -ErrorAction SilentlyContinue"
+        )
+        self._powershell(script)
