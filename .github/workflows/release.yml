@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v7.1.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build package and universal installer
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+          python scripts/build_release.py
+          python scripts/verify_release.py
+      - name: Generate package checksums
+        run: |
+          cd dist
+          sha256sum *.whl *.tar.gz >> SHA256SUMS
+      - name: Upload release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/jervis-installer.pyz
+            dist/jervis-installer.pyz.sha256
+            dist/SHA256SUMS
