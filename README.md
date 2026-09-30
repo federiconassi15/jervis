@@ -1,100 +1,71 @@
 # Jervis
 
-> A lightweight, always-on voice assistant for local hardware, OpenClaw, and agentic workflows.
+> A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis is an open-source voice assistant designed to feel fast, conversational, and useful on modest hardware. It combines local wake-word detection and speech processing with an external agentic brain, a terminal control deck, multi-user identity, permissions, skills, proactive events, and repair tooling.
+Jervis 7.1 is a local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain.
 
-> [!IMPORTANT]
-> Jervis is under active development. The repository is being prepared for its first public release; the production runtime and generic installer will be published separately.
+## Install
 
-## Why Jervis?
+Jervis requires Python 3.11 or newer.
 
-Most voice assistants either depend heavily on the cloud or assume powerful hardware. Jervis is built around a different idea:
+The same one-command bootstrap works from PowerShell, Command Prompt, Terminal, bash, and zsh:
 
-- **Fast by default** — wake words, simple commands, cues, and routing stay local.
-- **Low-resource** — designed to run on modest Linux hardware.
-- **Conversational** — follow-ups, interruption, speaker sessions, and natural dialogue.
-- **Private where possible** — identity and local state remain local when practical.
-- **Hackable** — skills, agents, MCP integrations, and configuration are first-class.
-- **Recoverable** — component-level diagnostics and repair instead of rebooting everything.
+    python -c "import urllib.request;exec(urllib.request.urlopen('https://raw.githubusercontent.com/federiconassi15/jervis/main/install.py').read())"
 
-## Planned architecture
+The bootstrap selects the newest stable 7.1.x release, downloads the universal jervis-installer.pyz asset, verifies its SHA-256, and launches it with the current Python interpreter.
 
-```text
-Microphone
-   │
-   ▼
-Wake / AEC / VAD
-   │
-   ▼
-Speaker + Session Manager
-   │
-   ▼
-Intent Router
-   ├── Local command
-   ├── Prerecorded response
-   ├── Skill
-   ├── MCP / agent
-   └── OpenClaw brain
-           │
-           ▼
-   Response Manager
-           │
-           ▼
- Interruptible TTS
-```
+You can also download jervis-installer.pyz directly from a GitHub release and run:
 
-Supporting services include identity, permissions, per-user memory, event history, health monitoring, proactive alerts, and the Jervis Control Deck.
+    python jervis-installer.pyz
 
-## Current direction
+## Desktop or Server
 
-The next public milestone is **Jervis 7.1**, focused on making conversation and speaker recognition substantially more reliable:
+Desktop mode detects the microphones and speakers on the everyday computer and asks which ones Jervis should use. An Android phone can optionally be selected as the microphone.
 
-- trusted conversation sessions
-- stronger speaker recognition from longer utterances
-- retry-before-password authentication
-- continuous high-confidence voice learning
-- conversation lock-on between follow-ups
-- a short **"Boss?"** wake acknowledgement
+Server mode installs the same product as a persistent always-on assistant for a NUC, home server, workstation, or other long-running machine.
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the broader plan.
+## OpenClaw
 
-## Installation
+OpenClaw setup is integrated into the Jervis installer. Existing installations are reused. If OpenClaw is missing, Jervis can run its official installer quietly and then expose only the authentication/onboarding step that needs user input.
 
-The public installer is **not available yet**.
+## Voice flow
 
-Please do not copy private or machine-specific development installers into a new system. A clean, generic installer will be published here once the project structure and migration path are ready.
+    Jervis
+      ↓
+    Boss?
+      ↓
+    full natural command
+      ↓
+    speaker identity + trusted session
+      ↓
+    local route / skill / OpenClaw
+      ↓
+    response + follow-up conversation
 
-## Configuration
+Jervis 7.1 identifies from the longer natural command rather than trying to authenticate a person from the wake word alone.
 
-A safe starter configuration is available in [config.example.json](config.example.json).
+## Commands
 
-Never commit:
+    jervis
+    jervis run
+    jervis doctor
+    jervis install
+    jervis update-check
 
-- API keys or tokens
-- authentication passphrases or hashes
-- speaker voiceprints
-- private conversation history
-- device serial numbers
-- personal filesystem paths
-- machine-specific credentials
+## Platforms
 
-## Contributing
+Linux, Windows, and macOS share the same core and configuration schema. OS-specific startup and device behavior live behind platform adapters.
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+## Security
 
-For security issues, see [SECURITY.md](SECURITY.md).
+Speaker recognition is a convenience identity signal, not strong authorization for sensitive actions. Authentication passphrases are stored as PBKDF2-HMAC-SHA256 verifiers rather than plaintext.
 
 ## License
 
-Jervis is licensed under the **GNU General Public License v3.0**. See [LICENSE](LICENSE).
+GNU General Public License v3.0 or later. See LICENSE.
 
 ## Credits
 
-Created by **Federico Nassi**.
+Created by Federico Nassi with AI-assisted development, debugging, architecture work, testing, and documentation.
 
-Development has included AI-assisted coding, debugging, architecture work, and documentation. AI assistance does not replace human authorship, review, or responsibility for the project.
-
----
-
-**Jervis is not affiliated with Marvel, Iron Man, or any related trademark holder.**
+Jervis is not affiliated with Marvel, Iron Man, or any related trademark holder.

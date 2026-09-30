@@ -27,7 +27,12 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="jervis-release-build-") as directory:
         staging = Path(directory)
         copy_tree(staging)
-        zipapp.create_archive(staging, output, compressed=True)
+        zipapp.create_archive(
+            staging,
+            output,
+            interpreter="/usr/bin/env python3",
+            compressed=True,
+        )
 
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     (DIST / "jervis-installer.pyz.sha256").write_text(

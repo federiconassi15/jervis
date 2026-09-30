@@ -23,10 +23,10 @@ jobs:
           python -m build
           python scripts/build_release.py
           python scripts/verify_release.py
-      - name: Generate package checksums
+      - name: Generate release checksums
         run: |
           cd dist
-          sha256sum *.whl *.tar.gz >> SHA256SUMS
+          sha256sum jervis-installer.pyz *.whl *.tar.gz > SHA256SUMS
       - name: Upload release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2

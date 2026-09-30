@@ -109,8 +109,8 @@ def audio_test(input_device: int | None, output_device: int, sample_rate: int) -
 
     if yes_no("Play a short speaker test tone?"):
         seconds = 0.25
-        t = np.arange(int(sample_rate * seconds), dtype=np.float32) / sample_rate
-        tone = (0.12 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        timeline = np.arange(int(sample_rate * seconds), dtype=np.float32) / sample_rate
+        tone = (0.12 * np.sin(2 * np.pi * 440 * timeline)).astype(np.float32)
         sd.play(tone, samplerate=sample_rate, device=output_device)
         sd.wait()
 
@@ -124,7 +124,8 @@ def audio_test(input_device: int | None, output_device: int, sample_rate: int) -
         )
         sd.wait()
         level = float(np.sqrt(np.mean(np.square(recording), dtype=np.float64)))
-        print(color("  ✓ Microphone RMS " + format(level, ".4f"), GREEN if level > 0.002 else YELLOW))
+        shade = GREEN if level > 0.002 else YELLOW
+        print(color("  ✓ Microphone RMS " + format(level, ".4f"), shade))
 
 
 def pick_audio(config: dict) -> None:
@@ -139,9 +140,7 @@ def pick_audio(config: dict) -> None:
 
     if source_choice == 1:
         adb = ensure_adb(yes_no)
-        proc = subprocess.run(
-            [str(adb), "devices"], text=True, capture_output=True, check=True
-        )
+        proc = subprocess.run([str(adb), "devices"], text=True, capture_output=True, check=True)
         serials = [
             line.split("\t", 1)[0]
             for line in proc.stdout.splitlines()
@@ -265,12 +264,18 @@ def install() -> None:
     paths = Paths.resolve()
     paths.ensure()
     config_path = paths.config / "config.json"
+    database_path = paths.data / "jervis.sqlite3"
     adapter = current_platform()
 
     with InstallTransaction(adapter) as transaction:
         transaction.track_file(config_path)
+        transaction.track_file(database_path)
+        transaction.track_file(Path(str(database_path) + "-wal"))
+        transaction.track_file(Path(str(database_path) + "-shm"))
+
         save(config_path, config)
         load(config_path)
+        setup_owner(paths, config)
 
         if config["install"]["start_at_boot"]:
             existing_service = False
@@ -282,7 +287,6 @@ def install() -> None:
                 adapter.install_service(resolve_launcher(), {"JERVIS_HOME": str(paths.root)})
                 transaction.mark_service_changed()
 
-        setup_owner(paths, config)
         transaction.commit()
 
     print()
