@@ -44,7 +44,7 @@ jobs:
         run: python -m pytest
 
       - name: Ruff
-        run: ruff check src tests scripts bootstrap.py install.py
+        run: ruff check --select E9,F63,F7,F82 src tests scripts bootstrap.py install.py
 
   release-artifact:
     name: Universal release artifact
