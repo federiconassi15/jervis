@@ -52,6 +52,20 @@ Jervis 7.1 identifies from the longer natural command rather than trying to auth
     jervis install
     jervis update-check
 
+## Wiki
+
+The in-repository Jervis wiki contains **381 pages** of installation, architecture, audio, voice, identity, OpenClaw, Control Deck, platform, security, state, skills, agents, operations, development, configuration, troubleshooting, and reference documentation.
+
+Start here: [Jervis Wiki Home](docs/wiki/Home.md)
+
+Canonical technical docs:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Monster Installer Specification](docs/INSTALLER_SPEC.md)
+- [Cross-platform Compatibility](docs/CROSS_PLATFORM.md)
+- [Privacy](docs/PRIVACY.md)
+- [Roadmap](docs/ROADMAP.md)
+
 ## Platforms
 
 Linux, Windows, and macOS share the same core and configuration schema. OS-specific startup and device behavior live behind platform adapters.
