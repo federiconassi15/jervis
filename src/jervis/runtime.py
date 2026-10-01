@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import collections
 import queue
+import threading
 import time
 
 import numpy as np
 
 from .audio import AndroidAudioSource, DesktopAudio
-from .audio.processing import analyze, quality_score
+from .audio.processing import analyze, quality_score, rms
 from .brain import OpenClawBrain
 from .config import load
 from .identity import IdentityManager
@@ -92,6 +94,7 @@ class Runtime:
         )
         self.running = True
         self._audio = None
+        self._pending_barge: np.ndarray | None = None
         self.activity("Idle — waiting for Jervis")
 
     def activity(self, text: str) -> None:
@@ -139,7 +142,13 @@ class Runtime:
             else np.zeros(0, dtype=np.float32)
         )
 
-    def speak(self, text: str, user_id: str | None = None) -> None:
+    def speak(
+        self,
+        text: str,
+        user_id: str | None = None,
+        *,
+        allow_barge: bool = False,
+    ) -> None:
         volume = float(
             self.state.get_kv(
                 "audio.jervis_volume",
@@ -149,8 +158,83 @@ class Runtime:
         self.tts.set_volume(volume)
         self.state.dialogue("jervis", text, user_id)
         self.activity("Speaking — " + text[:80])
-        self.tts.speak(text)
-        if self._audio is not None and hasattr(self._audio, "flush"):
+
+        if not allow_barge or self._audio is None:
+            try:
+                self.tts.speak(text)
+            except Exception as exc:
+                self.state.event("tts_error", str(exc))
+            if self._audio is not None and hasattr(self._audio, "flush"):
+                try:
+                    self._audio.flush()
+                except Exception:
+                    pass
+            return
+
+        errors: list[BaseException] = []
+
+        def playback() -> None:
+            try:
+                self.tts.speak(text)
+            except BaseException as exc:
+                errors.append(exc)
+
+        worker = threading.Thread(target=playback, name="jervis-tts", daemon=True)
+        worker.start()
+
+        started = time.monotonic()
+        baseline: list[float] = []
+        pre: collections.deque[np.ndarray] = collections.deque(maxlen=8)
+        hot = 0
+        trigger_frame: np.ndarray | None = None
+
+        while worker.is_alive():
+            try:
+                frame = self._audio.read(timeout=0.03)
+            except queue.Empty:
+                continue
+            level = rms(frame)
+            pre.append(frame)
+
+            age = time.monotonic() - started
+            if age < 0.25:
+                baseline.append(level)
+                continue
+
+            sorted_baseline = sorted(baseline)
+            leak = (
+                sorted_baseline[len(sorted_baseline) // 2]
+                if sorted_baseline
+                else self.vad.noise
+            )
+            trigger = max(0.025, leak * 2.2, self.vad.noise * 4.0)
+            hot = hot + 1 if level >= trigger else max(0, hot - 1)
+            if hot >= 4:
+                trigger_frame = frame
+                self.tts.stop()
+                break
+
+        worker.join(timeout=2.0)
+
+        if errors:
+            self.state.event("tts_error", str(errors[0]))
+            return
+
+        if trigger_frame is not None:
+            seed = list(pre)
+            first = np.concatenate(seed) if seed else trigger_frame
+            self._pending_barge = self.capture(
+                self._audio,
+                first=first,
+                max_seconds=7.0,
+            )
+            self.state.event(
+                "barge_in",
+                "user=" + str(user_id or "unknown"),
+            )
+            return
+
+        if hasattr(self._audio, "flush"):
             try:
                 self._audio.flush()
             except Exception:
@@ -171,7 +255,7 @@ class Runtime:
         )
         self.state.set_kv("brain.last_route", reply.route)
         if reply.ok:
-            self.speak(reply.text, user_id)
+            self.speak(reply.text, user_id, allow_barge=True)
         else:
             self.state.event("brain_error", reply.error)
             self.speak(
@@ -443,6 +527,22 @@ class Runtime:
                     )
 
                 self.respond(command, user_id, log_user=not logged_unknown)
+
+                while self._pending_barge is not None:
+                    barged_audio = self._pending_barge
+                    self._pending_barge = None
+                    if barged_audio.size == 0:
+                        break
+                    self.activity("Barge-in — transcribing")
+                    barged_text = self.stt.transcribe(
+                        barged_audio,
+                        self.config["assistant"]["language"],
+                    )
+                    if not barged_text:
+                        break
+                    self.sessions.refresh()
+                    self.respond(barged_text, user_id)
+
                 until = time.monotonic() + self.config["speech"]["follow_up_seconds"]
 
                 while self.running and time.monotonic() < until:

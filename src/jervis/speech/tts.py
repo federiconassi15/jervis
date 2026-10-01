@@ -130,6 +130,13 @@ class TTS:
         self._cache[text] = rendered
         return rendered
 
+    def stop(self) -> None:
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
+
     def speak(self, text: str) -> None:
         if not text.strip():
             return

@@ -45,6 +45,17 @@ class BrainRouter:
         user = self.state.user(user_id)
         name = str(user["name"]) if user else user_id
 
+        if query in {
+            "stop",
+            "wait",
+            "never mind",
+            "nevermind",
+            "cancel",
+            "cancel that",
+            "forget it",
+        }:
+            return "Understood."
+
         if query in {"who am i", "who am i?", "what is my name", "what's my name"}:
             return "You're " + name + "."
 
