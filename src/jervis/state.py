@@ -60,6 +60,16 @@ CREATE TABLE IF NOT EXISTS presence(
   seen_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(seen_at DESC);
+CREATE TABLE IF NOT EXISTS notifications(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  key TEXT NOT NULL,
+  text TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  delivered INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_delivery
+  ON notifications(delivered,id);
 CREATE TABLE IF NOT EXISTS kv(
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -325,3 +335,57 @@ class State:
         query += "ORDER BY p.seen_at DESC"
         with self._lock:
             return list(self._db.execute(query))
+
+
+    def clear_memories(self, user_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM memories WHERE user_id=?", (user_id,))
+            self._db.commit()
+
+    def recent_user_dialogue(
+        self,
+        user_id: str,
+        limit: int = 10,
+    ) -> list[sqlite3.Row]:
+        with self._lock:
+            rows = list(
+                self._db.execute(
+                    "SELECT ts,user_id,role,text FROM dialogue "
+                    "WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
+        rows.reverse()
+        return rows
+
+    def notify(self, key: str, text: str, user_id: str | None = None) -> int:
+        with self._lock:
+            cursor = self._db.execute(
+                "INSERT INTO notifications(ts,key,text,user_id,delivered) "
+                "VALUES(?,?,?,?,0)",
+                (time.time(), key, str(text)[:2000], user_id),
+            )
+            self._db.commit()
+            return int(cursor.lastrowid)
+
+    def next_notification(self, user_id: str | None = None):
+        with self._lock:
+            if user_id is None:
+                return self._db.execute(
+                    "SELECT id,key,text,user_id FROM notifications "
+                    "WHERE delivered=0 ORDER BY id LIMIT 1"
+                ).fetchone()
+            return self._db.execute(
+                "SELECT id,key,text,user_id FROM notifications "
+                "WHERE delivered=0 AND (user_id IS NULL OR user_id=?) "
+                "ORDER BY id LIMIT 1",
+                (user_id,),
+            ).fetchone()
+
+    def mark_notification(self, notification_id: int) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE notifications SET delivered=1 WHERE id=?",
+                (int(notification_id),),
+            )
+            self._db.commit()
