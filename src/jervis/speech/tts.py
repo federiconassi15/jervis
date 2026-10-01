@@ -4,6 +4,7 @@ import platform
 import shutil
 import subprocess
 import tempfile
+import threading
 import wave
 from pathlib import Path
 
@@ -23,6 +24,7 @@ class TTS:
         self.output_device = output_device
         self.volume = float(volume)
         self._cache: dict[str, tuple[np.ndarray, int]] = {}
+        self._cache_lock = threading.RLock()
 
     def set_volume(self, volume: float) -> None:
         self.volume = max(0.05, min(2.0, float(volume)))
@@ -118,17 +120,39 @@ class TTS:
         ).astype(np.float32)
 
     def _render(self, text: str) -> tuple[np.ndarray, int]:
-        cached = self._cache.get(text)
+        with self._cache_lock:
+            cached = self._cache.get(text)
         if cached is not None:
             return cached
+
         with tempfile.TemporaryDirectory(prefix="jervis-tts-") as directory:
             path = Path(directory) / "speech.wav"
             self._render_system(text, path)
             rendered = self._read_wav(path)
-        if len(self._cache) >= 64:
-            self._cache.clear()
-        self._cache[text] = rendered
+
+        with self._cache_lock:
+            if len(self._cache) >= 96:
+                oldest = next(iter(self._cache), None)
+                if oldest is not None:
+                    self._cache.pop(oldest, None)
+            self._cache[text] = rendered
         return rendered
+
+    def prewarm(self, texts: list[str]) -> None:
+        def render_all() -> None:
+            for text in texts:
+                if not text.strip():
+                    continue
+                try:
+                    self._render(text)
+                except Exception:
+                    continue
+
+        threading.Thread(
+            target=render_all,
+            name="jervis-tts-prewarm",
+            daemon=True,
+        ).start()
 
     def stop(self) -> None:
         try:

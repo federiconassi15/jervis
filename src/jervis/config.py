@@ -37,6 +37,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "follow_up_seconds": 10,
         "tts_backend": "system",
         "edge_voice": "en-GB-RyanNeural",
+        "stt_prewarm": True,
+        "stt_keep_warm_seconds": 900,
+        "stt_beam_size": 1,
     },
     "identity": {
         "enabled": True,
@@ -58,6 +61,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "fast_thinking": "low",
         "default_thinking": "low",
         "deep_thinking": "high",
+        "gateway_http": True,
+        "gateway_url": "http://127.0.0.1:18789",
+        "gateway_retry_seconds": 60,
     },
     "privacy": {
         "persist_dialogue": True,

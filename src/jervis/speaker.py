@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -21,26 +22,44 @@ class SherpaBackend:
     def __init__(self, model_path: Path | None) -> None:
         self.model_path = model_path
         self.extractor = None
+        self._lock = threading.RLock()
 
     @property
     def available(self) -> bool:
         return bool(self.model_path and self.model_path.exists())
 
     def _load(self):
-        if self.extractor is not None:
+        with self._lock:
+            if self.extractor is not None:
+                return self.extractor
+            if not self.available:
+                raise RuntimeError("speaker model is not installed")
+
+            import sherpa_onnx
+
+            config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                model=str(self.model_path)
+            )
+            if not config.validate():
+                raise RuntimeError("invalid speaker model")
+            self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config)
             return self.extractor
+
+    def prewarm(self) -> None:
         if not self.available:
-            raise RuntimeError("speaker model is not installed")
+            return
 
-        import sherpa_onnx
+        def load() -> None:
+            try:
+                self._load()
+            except Exception:
+                pass
 
-        config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=str(self.model_path)
-        )
-        if not config.validate():
-            raise RuntimeError("invalid speaker model")
-        self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config)
-        return self.extractor
+        threading.Thread(
+            target=load,
+            name="jervis-speaker-prewarm",
+            daemon=True,
+        ).start()
 
     def embed(self, samples, sample_rate: int) -> list[float]:
         extractor = self._load()
@@ -62,6 +81,9 @@ class SpeakerRecognizer:
         self.state = state
         self.config = config
         self.backend = SherpaBackend(model_path)
+
+    def prewarm(self) -> None:
+        self.backend.prewarm()
 
     def match(self, samples, sample_rate: int, active_user: str | None) -> SpeakerMatch:
         if not self.backend.available:
@@ -128,10 +150,7 @@ class SpeakerRecognizer:
             and margin >= float(config["minimum_margin"])
         ):
             band = ConfidenceBand.STRONG
-        elif (
-            active_user == user_id
-            and score >= float(config["session_threshold"])
-        ):
+        elif active_user == user_id and score >= float(config["session_threshold"]):
             band = ConfidenceBand.SESSION_ASSISTED
         elif (
             score >= float(config["uncertain_threshold"])
