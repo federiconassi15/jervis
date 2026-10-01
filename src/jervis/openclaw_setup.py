@@ -51,7 +51,7 @@ def find_openclaw() -> Path | None:
                     if platform.system() == "Windows"
                     else [base / "bin" / "openclaw"]
                 )
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             pass
 
     return next((path for path in candidates if path.exists()), None)
@@ -63,11 +63,7 @@ def run(
     interactive: bool = True,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    kwargs = {
-        "check": False,
-        "text": True,
-        "timeout": timeout,
-    }
+    kwargs = {"check": False, "text": True, "timeout": timeout}
     if not interactive:
         kwargs["capture_output"] = True
 
@@ -79,19 +75,15 @@ def run(
 
 
 def install_official(progress: Progress) -> Path:
-    progress("Installing OpenClaw using its official installer")
+    progress("Installing OpenClaw quietly")
     system = platform.system()
 
     if system == "Windows":
         payload = urllib.request.urlopen(
-            "https://openclaw.ai/install.ps1",
-            timeout=30,
+            "https://openclaw.ai/install.ps1", timeout=30
         ).read().decode("utf-8")
         with tempfile.NamedTemporaryFile(
-            "w",
-            suffix=".ps1",
-            delete=False,
-            encoding="utf-8",
+            "w", suffix=".ps1", delete=False, encoding="utf-8"
         ) as handle:
             handle.write(payload)
             script = Path(handle.name)
@@ -114,25 +106,14 @@ def install_official(progress: Progress) -> Path:
             script.unlink(missing_ok=True)
     else:
         payload = urllib.request.urlopen(
-            "https://openclaw.ai/install.sh",
-            timeout=30,
+            "https://openclaw.ai/install.sh", timeout=30
         ).read()
-        with tempfile.NamedTemporaryFile(
-            "wb",
-            suffix=".sh",
-            delete=False,
-        ) as handle:
+        with tempfile.NamedTemporaryFile("wb", suffix=".sh", delete=False) as handle:
             handle.write(payload)
             script = Path(handle.name)
         try:
             proc = subprocess.run(
-                [
-                    "bash",
-                    str(script),
-                    "--no-prompt",
-                    "--no-onboard",
-                    "--verify",
-                ],
+                ["bash", str(script), "--no-prompt", "--no-onboard", "--verify"],
                 text=True,
                 capture_output=True,
                 check=False,
@@ -142,49 +123,30 @@ def install_official(progress: Progress) -> Path:
 
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "unknown error").strip()[-3000:]
-        raise RuntimeError("OpenClaw installer failed: " + detail)
+        raise RuntimeError("OpenClaw installation failed: " + detail)
 
     cli = find_openclaw()
     if not cli:
         raise RuntimeError(
-            "OpenClaw installed, but its CLI could not be found in the current session"
+            "OpenClaw installed successfully, but its command is not visible in this terminal yet."
         )
     return cli
 
 
 def doctor(cli: Path) -> tuple[bool, str]:
     try:
-        proc = run(
-            cli,
-            "doctor",
-            interactive=False,
-            timeout=60,
-        )
+        proc = run(cli, "doctor", interactive=False, timeout=60)
     except subprocess.TimeoutExpired:
         return False, "OpenClaw doctor timed out"
     detail = ((proc.stdout or "") + (proc.stderr or "")).strip()
     return proc.returncode == 0, detail[-3000:]
 
 
-def configure(
-    cli: Path,
-    mode: str,
-    choose: Callable[[str, list[str], int], int],
-) -> None:
-    choice = choose(
-        "OpenClaw model access",
-        [
-            "ChatGPT / Codex subscription",
-            "OpenAI API key",
-            "Full OpenClaw setup / another provider",
-            "Configure later",
-        ],
-        0,
-    )
-    if choice == 3:
+def configure_mode(cli: Path, mode: str, auth_mode: str) -> None:
+    if auth_mode == "later":
         return
 
-    if choice == 0:
+    if auth_mode == "codex":
         method = "device-code" if mode == "server" else "oauth"
         proc = run(
             cli,
@@ -199,13 +161,8 @@ def configure(
             interactive=True,
         )
         if proc.returncode != 0:
-            raise RuntimeError("OpenAI/Codex authentication did not complete")
-        gateway = run(cli, "gateway", "install", interactive=True)
-        if gateway.returncode != 0:
-            raise RuntimeError("OpenClaw gateway service installation failed")
-        return
-
-    if choice == 1:
+            raise RuntimeError("ChatGPT/Codex sign-in did not complete.")
+    elif auth_mode == "api-key":
         proc = run(
             cli,
             "models",
@@ -219,17 +176,34 @@ def configure(
             interactive=True,
         )
         if proc.returncode != 0:
-            raise RuntimeError("OpenAI API-key authentication did not complete")
-        gateway = run(cli, "gateway", "install", interactive=True)
-        if gateway.returncode != 0:
-            raise RuntimeError("OpenClaw gateway service installation failed")
+            raise RuntimeError("OpenAI API-key sign-in did not complete.")
+    elif auth_mode == "full":
+        proc = run(cli, "onboard", "--install-daemon", interactive=True)
+        if proc.returncode != 0:
+            raise RuntimeError("OpenClaw onboarding did not complete.")
         return
+    else:
+        raise ValueError("Unknown OpenClaw auth mode.")
 
-    proc = run(
-        cli,
-        "onboard",
-        "--install-daemon",
-        interactive=True,
+    gateway = run(cli, "gateway", "install", interactive=True)
+    if gateway.returncode != 0:
+        raise RuntimeError("OpenClaw gateway installation did not complete.")
+
+
+def configure(
+    cli: Path,
+    mode: str,
+    choose: Callable[[str, list[str], int], int],
+) -> None:
+    choices = ["codex", "api-key", "full", "later"]
+    selected = choose(
+        "OpenClaw model access",
+        [
+            "ChatGPT / Codex subscription",
+            "OpenAI API key",
+            "Full OpenClaw setup / another provider",
+            "Configure later",
+        ],
+        0,
     )
-    if proc.returncode != 0:
-        raise RuntimeError("OpenClaw onboarding did not complete")
+    configure_mode(cli, mode, choices[selected])

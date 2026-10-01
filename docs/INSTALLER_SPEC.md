@@ -113,3 +113,12 @@ Every stable release provides:
 - generated release notes.
 
 Automatic update logic stays on the same major/minor line. A 7.1.x installation never silently becomes 7.2 or 8.
+
+
+## Native fresh-machine release
+
+The primary public release path does not require a preinstalled Python interpreter. GitHub Actions builds the same Jervis source into self-contained native binaries for Windows x64, Linux x64/ARM64, macOS Intel, and macOS Apple Silicon. The binary is both installer and runtime: first launch copies itself into the stable per-user Jervis location and runs setup; later launches expose the normal Jervis CLI/Control Deck.
+
+The Python zipapp remains a developer/portable fallback, not the fresh-machine requirement.
+
+GitHub Releases also publish one all-platforms ZIP containing all native binaries. A literal shell command cannot be guaranteed identical across stock Windows PowerShell/cmd and POSIX shells because they do not share a command language or downloader; the product-level installer flow and release are nevertheless the same.

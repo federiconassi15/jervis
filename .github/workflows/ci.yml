@@ -70,3 +70,45 @@ jobs:
 
       - name: Verify bootstrap syntax
         run: python -m py_compile bootstrap.py install.py
+
+  native-smoke:
+    name: Native binary / ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x64
+            asset: jervis-linux-x64
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+            asset: jervis-linux-arm64
+          - os: windows-latest
+            name: windows-x64
+            asset: jervis-windows-x64
+          - os: macos-15-intel
+            name: macos-x64
+            asset: jervis-macos-x64
+          - os: macos-latest
+            name: macos-arm64
+            asset: jervis-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Linux audio build prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 espeak-ng
+
+      - name: Install native build environment
+        run: python -m pip install . "pyinstaller>=6,<7"
+
+      - name: Build native Jervis
+        run: python scripts/build_native.py --name ${{ matrix.asset }}
+
+      - name: Verify native Jervis
+        run: python scripts/verify_native.py --path dist/${{ matrix.asset }}

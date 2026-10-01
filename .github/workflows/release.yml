@@ -12,22 +12,19 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  metadata:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
       - name: Read Jervis version
         id: meta
         shell: python
         run: |
+          import os
           import pathlib
           import re
-          import os
 
           text = pathlib.Path("src/jervis/version.py").read_text(encoding="utf-8")
           match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
@@ -39,30 +36,108 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("version=" + version + "\n")
 
-      - name: Build package and universal installer
+  source:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build source packages and universal Python installer
         run: |
           python -m pip install --upgrade build
           python -m build
           python scripts/build_release.py
           python scripts/verify_release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-release
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/jervis-installer.pyz
+            dist/jervis-installer.pyz.sha256
 
-      - name: Generate release checksums
+  native:
+    needs: metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: jervis-linux-x64
+          - os: ubuntu-24.04-arm
+            asset: jervis-linux-arm64
+          - os: windows-latest
+            asset: jervis-windows-x64
+          - os: macos-15-intel
+            asset: jervis-macos-x64
+          - os: macos-latest
+            asset: jervis-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Linux audio build prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 espeak-ng
+      - name: Install native build environment
+        run: python -m pip install . "pyinstaller>=6,<7"
+      - name: Build native Jervis
+        run: python scripts/build_native.py --name ${{ matrix.asset }}
+      - name: Verify native Jervis
+        run: python scripts/verify_native.py --path dist/${{ matrix.asset }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}*
+
+  publish:
+    needs: [metadata, source, native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Build all-platforms download and checksums
         run: |
-          cd dist
-          sha256sum jervis-installer.pyz *.whl *.tar.gz > SHA256SUMS
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
 
+          root = Path("release")
+          names = [
+              "jervis-linux-x64",
+              "jervis-linux-arm64",
+              "jervis-windows-x64.exe",
+              "jervis-macos-x64",
+              "jervis-macos-arm64",
+          ]
+          with zipfile.ZipFile(
+              root / "jervis-installer-all-platforms.zip",
+              "w",
+              compression=zipfile.ZIP_DEFLATED,
+          ) as bundle:
+              for name in names:
+                  path = root / name
+                  if not path.exists():
+                      raise SystemExit("Missing release asset: " + name)
+                  bundle.write(path, name)
+          PY
+          cd release
+          sha256sum * > SHA256SUMS
       - name: Publish stable release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.meta.outputs.version }}
-          name: Jervis ${{ steps.meta.outputs.version }}
+          tag_name: v${{ needs.metadata.outputs.version }}
+          name: Jervis ${{ needs.metadata.outputs.version }}
           target_commitish: ${{ github.sha }}
           prerelease: false
           draft: false
           generate_release_notes: true
           files: |
-            dist/*.whl
-            dist/*.tar.gz
-            dist/jervis-installer.pyz
-            dist/jervis-installer.pyz.sha256
-            dist/SHA256SUMS
+            release/*

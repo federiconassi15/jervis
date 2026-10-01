@@ -34,7 +34,8 @@ def test_linux_tts_missing_is_installed_even_when_portaudio_exists(
     prereqs.ensure_linux_audio(lambda prompt: True)
 
     assert calls == [
-        ["apt-get", "install", "-y", "espeak-ng"]
+        ["apt-get", "update"],
+        ["apt-get", "install", "-y", "espeak-ng"],
     ]
 
 

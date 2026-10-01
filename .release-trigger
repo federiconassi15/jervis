@@ -1,3 +1,3 @@
-7.1.0
-Reviewed commit: f8d703b66a4e4be5dbbc5a7b9489dd77fbc16037
-Purpose: explicit stable release publication trigger.
+7.1.1
+Reviewed RC commit: 4b9341e2f233aa1ec92655eafdda26707ad8e1ca
+Purpose: publish the validated cross-platform native Jervis 7.1.1 release.

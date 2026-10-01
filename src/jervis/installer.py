@@ -1,37 +1,33 @@
 from __future__ import annotations
 
-import getpass
-import json
 import os
 import platform
 import random
-import secrets
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.containers import Container, Horizontal, VerticalScroll
+from textual.widgets import (
+    Button,
+    Input,
+    Label,
+    LoadingIndicator,
+    ProgressBar,
+    Select,
+    ContentSwitcher,
+    Static,
+    Switch,
+)
 
 from .audio.devices import default_devices, list_devices
-from .config import DEFAULT_CONFIG, load, save
-from .install_tx import InstallTransaction
-from .openclaw_setup import configure as configure_openclaw
-from .openclaw_setup import doctor as openclaw_doctor
-from .openclaw_setup import find_openclaw, install_official
-from .paths import Paths
-from .platforms import current_platform
-from .prereqs import ensure_adb, ensure_linux_audio
-from .security import hash_passphrase
-from .speaker_model import ensure_speaker_model
-from .state import State
-
-BLUE = "\033[38;5;45m"
-DIM = "\033[2m"
-RESET = "\033[0m"
-GREEN = "\033[38;5;82m"
-YELLOW = "\033[38;5;220m"
-RED = "\033[31m"
+from .install_engine import TOTAL_STEPS, run_install
+from .install_plan import InstallOutcome, InstallPlan
+from .openclaw_setup import configure_mode, find_openclaw
+from .prereqs import find_adb
 
 BANTER = [
     "Jervis, make me like Tony Stank.",
@@ -42,355 +38,744 @@ BANTER = [
     "One moment, boss.",
     "Installing good decisions. Results may vary.",
     "Turning caffeine into automation.",
+    "Giving your terminal a suspicious amount of personality.",
+    "Arc reactor sold separately.",
 ]
 
 
-def color(text: str, value: str) -> str:
-    return value + text + RESET if sys.stdout.isatty() else text
+class JervisInstaller(App[None]):
+    TITLE = "Jervis Installer"
+    SUB_TITLE = "7.1"
 
+    CSS = """
+    Screen {
+        background: #020812;
+        color: #d9f3ff;
+        overflow: hidden;
+    }
 
-def header() -> None:
-    print(color("╭──────────────────────────────────────────────╮", BLUE))
-    print(color("│                J E R V I S                   │", BLUE))
-    print(color("│         intelligent systems installer        │", BLUE))
-    print(color("╰──────────────────────────────────────────────╯", BLUE))
-    print()
-    print(color("  “" + random.choice(BANTER) + "”", DIM))
-    print()
+    #frame {
+        width: 94%;
+        max-width: 112;
+        height: 100%;
+        margin: 0 0;
+        border: round #1db6ff;
+        background: #04111f;
+        padding: 0 2;
+    }
 
+    #hero {
+        height: 4;
+        content-align: center middle;
+        color: #59d7ff;
+        text-style: bold;
+    }
 
-def choose(prompt: str, options: list[str], default: int = 0) -> int:
-    print(prompt)
-    for index, option in enumerate(options):
-        print("  " + ("›" if index == default else " ") + " " + str(index + 1) + ". " + option)
-    while True:
-        value = input("Choose [" + str(default + 1) + "]: ").strip()
-        if not value:
-            return default
-        if value.isdigit() and 1 <= int(value) <= len(options):
-            return int(value) - 1
-        print("Enter one of the listed numbers.")
+    #tagline {
+        height: 1;
+        content-align: center middle;
+        color: #6b91a8;
+        text-style: italic;
+    }
 
+    #stepbar {
+        height: 2;
+        content-align: center middle;
+        color: #4f788e;
+        border-bottom: solid #0b3852;
+    }
 
-def yes_no(prompt: str, default: bool = True) -> bool:
-    suffix = " [Y/n]: " if default else " [y/N]: "
-    value = input(prompt + suffix).strip().lower()
-    if not value:
-        return default
-    return value in {"y", "yes"}
+    #pages {
+        height: 1fr;
+        overflow: hidden;
+    }
 
+    .page {
+        height: 100%;
+        padding: 1 3;
+    }
 
-def progress(text: str) -> None:
-    print(color("  • " + text, BLUE))
+    .title {
+        height: 3;
+        color: #7de3ff;
+        text-style: bold;
+    }
 
+    .hint {
+        color: #779bad;
+        margin-bottom: 1;
+    }
 
-def setup_openclaw(mode: str) -> Path | None:
-    cli = find_openclaw()
-    if cli:
-        print(color("  ✓ OpenClaw detected", GREEN))
-        healthy, _ = openclaw_doctor(cli)
-        if healthy:
-            return cli
-        if yes_no("OpenClaw exists but needs configuration. Configure it now?"):
-            configure_openclaw(cli, mode, choose)
-        return cli
+    .card {
+        border: round #124d70;
+        background: #061725;
+        padding: 1 2;
+        margin: 1 0;
+    }
 
-    if not yes_no("OpenClaw is required for Jervis's agentic brain. Install it now?"):
-        print(color("  ! OpenClaw skipped; local Jervis features will still install.", YELLOW))
-        return None
+    Select, Input {
+        margin: 1 0;
+        border: tall #176a96;
+        background: #03101a;
+    }
 
-    cli = install_official(progress)
-    print(color("  ✓ OpenClaw installed", GREEN))
-    configure_openclaw(cli, mode, choose)
-    return cli
+    Select:focus, Input:focus {
+        border: tall #39c9ff;
+    }
 
+    Button {
+        margin-right: 1;
+        min-width: 14;
+    }
 
-def audio_test(input_device: int | None, output_device: int, sample_rate: int) -> None:
-    import sounddevice as sd
+    Button.-primary {
+        background: #0879b3;
+        color: white;
+    }
 
-    if yes_no("Play a short speaker test tone?"):
-        seconds = 0.25
-        timeline = np.arange(int(sample_rate * seconds), dtype=np.float32) / sample_rate
-        tone = (0.12 * np.sin(2 * np.pi * 440 * timeline)).astype(np.float32)
-        sd.play(tone, samplerate=sample_rate, device=output_device)
-        sd.wait()
+    Button:focus {
+        text-style: bold;
+        background: #12aee8;
+    }
 
-    if input_device is not None and yes_no("Test the selected microphone for half a second?"):
-        recording = sd.rec(
-            int(sample_rate * 0.5),
-            samplerate=sample_rate,
-            channels=1,
-            dtype="float32",
-            device=input_device,
-        )
-        sd.wait()
-        level = float(np.sqrt(np.mean(np.square(recording), dtype=np.float64)))
-        shade = GREEN if level > 0.002 else YELLOW
-        print(color("  ✓ Microphone RMS " + format(level, ".4f"), shade))
+    #nav {
+        dock: bottom;
+        height: 3;
+        padding: 0 2;
+        border-top: solid #0b3852;
+        align: right middle;
+        background: #04111f;
+    }
 
+    #pulse {
+        color: #31c8ff;
+        width: 4;
+        content-align: center middle;
+    }
 
-def pick_audio(config: dict) -> None:
-    ensure_linux_audio(yes_no)
-    devices = list_devices()
-    inputs = [device for device in devices if device.inputs > 0]
-    outputs = [device for device in devices if device.outputs > 0]
-    default_input, default_output = default_devices()
+    #progress-status {
+        height: 3;
+        color: #a9ebff;
+        text-style: bold;
+        content-align: center middle;
+    }
 
-    source_choice = choose("Microphone source", ["Computer microphone", "Android phone over ADB"])
-    selected_input: int | None = None
+    #progress-detail {
+        height: 3;
+        color: #7595a5;
+        content-align: center top;
+    }
 
-    if source_choice == 1:
-        adb = ensure_adb(yes_no)
-        proc = subprocess.run([str(adb), "devices"], text=True, capture_output=True, check=True)
-        serials = [
-            line.split("\t", 1)[0]
-            for line in proc.stdout.splitlines()
-            if line.endswith("\tdevice")
-        ]
-        if not serials:
-            raise RuntimeError("no authorized Android device is visible to ADB")
-        serial = serials[choose("Android device", serials)]
-        config["audio"]["source"] = {
-            "kind": "android",
-            "device": None,
-            "android_serial": serial,
-        }
-    else:
-        if not inputs:
-            raise RuntimeError("no microphone devices detected")
-        default = next(
-            (index for index, device in enumerate(inputs) if device.index == default_input),
-            0,
-        )
-        device = inputs[
-            choose(
-                "Microphone",
-                [item.name + " (" + item.hostapi + ")" for item in inputs],
-                default,
-            )
-        ]
-        selected_input = device.index
-        config["audio"]["source"] = {
-            "kind": "desktop",
-            "device": selected_input,
-            "android_serial": None,
-        }
+    ProgressBar {
+        margin: 2 4;
+    }
 
-    if not outputs:
-        raise RuntimeError("no speaker/output devices detected")
-    default = next(
-        (index for index, device in enumerate(outputs) if device.index == default_output),
-        0,
-    )
-    output = outputs[
-        choose(
-            "Output",
-            [item.name + " (" + item.hostapi + ")" for item in outputs],
-            default,
-        )
+    #done-mark {
+        height: 5;
+        content-align: center middle;
+        color: #60ffb5;
+        text-style: bold;
+    }
+
+    #error-mark {
+        height: 4;
+        content-align: center middle;
+        color: #ff6f91;
+        text-style: bold;
+    }
+
+    #review {
+        border: round #176a96;
+        background: #03101a;
+        padding: 1 2;
+        margin: 1 0;
+        height: auto;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "back", "Back"),
+        ("ctrl+c", "quit", "Quit"),
+        ("left", "previous_control", "Previous control"),
+        ("right", "next_control", "Next control"),
     ]
-    config["audio"]["output_device"] = output.index
-    audio_test(selected_input, output.index, int(config["audio"]["sample_rate"]))
 
+    STEPS = ["Mode", "Brain", "Audio", "Identity", "Review", "Install"]
 
-def setup_owner(paths: Paths, config: dict) -> None:
-    state = State(
-        paths.data / "jervis.sqlite3",
-        config["privacy"]["max_dialogue_rows"],
-        config["privacy"]["max_event_rows"],
-    )
-    try:
-        users = state.users()
-        has_passphrase = isinstance(
-            state.get_kv("auth.passphrase_hash"),
-            str,
+    def __init__(self) -> None:
+        super().__init__()
+        self.step = 0
+        self.plan = InstallPlan()
+        self.outcome: InstallOutcome | None = None
+        self.tagline = random.choice(BANTER)
+        self.pulse_frames = ["◐", "◓", "◑", "◒"]
+        self.pulse_index = 0
+        self.inputs, self.outputs, self.androids = self._detect_audio()
+        self.openclaw = find_openclaw()
+
+    def _detect_audio(self):
+        inputs = []
+        outputs = []
+        try:
+            devices = list_devices()
+            default_input, default_output = default_devices()
+            for device in devices:
+                if device.inputs > 0:
+                    marker = " · default" if device.index == default_input else ""
+                    inputs.append(
+                        (
+                            device.name + " · " + device.hostapi + marker,
+                            "desktop:" + str(device.index),
+                        )
+                    )
+                if device.outputs > 0:
+                    marker = " · default" if device.index == default_output else ""
+                    outputs.append(
+                        (
+                            device.name + " · " + device.hostapi + marker,
+                            device.index,
+                        )
+                    )
+        except Exception:
+            pass
+
+        androids = []
+        adb = find_adb()
+        if adb:
+            try:
+                proc = subprocess.run(
+                    [str(adb), "devices"],
+                    text=True,
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+                androids = [
+                    line.split("\t", 1)[0]
+                    for line in proc.stdout.splitlines()
+                    if line.endswith("\tdevice")
+                ]
+            except Exception:
+                androids = []
+
+        for serial in androids:
+            inputs.append(("Android phone · " + serial, "android:" + serial))
+        inputs.append(("Android phone · detect during setup", "android:auto"))
+        return inputs, outputs, androids
+
+    def compose(self) -> ComposeResult:
+        with Container(id="frame"):
+            with Horizontal():
+                yield Static("◐", id="pulse")
+                yield Static(
+                    "J  E  R  V  I  S\nINTELLIGENT SYSTEMS INSTALLER",
+                    id="hero",
+                )
+            yield Static("“" + self.tagline + "”", id="tagline")
+            yield Static("", id="stepbar")
+
+            with ContentSwitcher(initial="page-mode", id="pages"):
+                with VerticalScroll(classes="page", id="page-mode"):
+                    yield Static("Where will Jervis live?", classes="title")
+                    yield Static(
+                        "Desktop uses the computer you work on every day. "
+                        "Server is the always-on NUC/home-server style setup.",
+                        classes="hint",
+                    )
+                    yield Select(
+                        [
+                            ("Desktop · everyday PC or Mac", "desktop"),
+                            ("Server · always-on machine", "server"),
+                        ],
+                        value="desktop",
+                        allow_blank=False,
+                        id="mode",
+                    )
+                    yield Static(
+                        self._platform_summary(),
+                        classes="card",
+                    )
+
+                with VerticalScroll(classes="page", id="page-brain"):
+                    yield Static("Connect the OpenClaw brain", classes="title")
+                    yield Static(
+                        "Jervis handles OpenClaw installation quietly. "
+                        "You only see OpenClaw directly when it genuinely needs your sign-in.",
+                        classes="hint",
+                    )
+                    yield Static(
+                        (
+                            "● OpenClaw detected: " + str(self.openclaw)
+                            if self.openclaw
+                            else "○ OpenClaw is not installed yet"
+                        ),
+                        classes="card",
+                        id="openclaw-status",
+                    )
+                    yield Select(
+                        [
+                            ("ChatGPT / Codex subscription · recommended", "codex"),
+                            ("OpenAI API key", "api-key"),
+                            ("Full OpenClaw setup / another provider", "full"),
+                            ("Configure OpenClaw later", "later"),
+                        ],
+                        value="codex",
+                        allow_blank=False,
+                        id="openclaw-auth",
+                    )
+                    with Horizontal(classes="card"):
+                        yield Label("Install OpenClaw automatically if missing")
+                        yield Switch(value=True, id="openclaw-install")
+
+                with VerticalScroll(classes="page", id="page-audio"):
+                    yield Static("Choose how Jervis hears and speaks", classes="title")
+                    yield Static(
+                        "Use the detected devices below. Mouse and keyboard both work.",
+                        classes="hint",
+                    )
+                    yield Label("Microphone")
+                    yield Select(
+                        self.inputs,
+                        prompt="Choose a microphone",
+                        allow_blank=True,
+                        id="microphone",
+                    )
+                    yield Label("Speakers / output")
+                    yield Select(
+                        self.outputs,
+                        prompt="Choose an output",
+                        allow_blank=True,
+                        id="output",
+                    )
+                    with Horizontal():
+                        yield Button("Test microphone", id="test-mic")
+                        yield Button("Test speakers", id="test-output")
+                    with Horizontal(classes="card"):
+                        yield Label("Start Jervis automatically")
+                        yield Switch(value=True, id="autostart")
+
+                with VerticalScroll(classes="page", id="page-identity"):
+                    yield Static("Create the owner profile", classes="title")
+                    yield Static(
+                        "This stays local. Jervis asks how to address people instead of guessing gender.",
+                        classes="hint",
+                    )
+                    yield Input(placeholder="Your name", id="owner-name")
+                    yield Select(
+                        [("Sir", "sir"), ("Ma'am", "maam")],
+                        value="sir",
+                        allow_blank=False,
+                        id="honorific",
+                    )
+                    yield Input(
+                        placeholder="Jervis authentication passphrase",
+                        password=True,
+                        id="passphrase",
+                    )
+                    yield Input(
+                        placeholder="Confirm passphrase",
+                        password=True,
+                        id="passphrase-confirm",
+                    )
+                    yield Static(
+                        "The passphrase is never displayed in the review screen or normal logs.",
+                        classes="hint",
+                    )
+
+                with VerticalScroll(classes="page", id="page-review"):
+                    yield Static("Ready to build Jervis", classes="title")
+                    yield Static("", id="review")
+                    yield Static(
+                        "Nothing is committed until the transactional install reaches its final checks.",
+                        classes="hint",
+                    )
+
+                with VerticalScroll(classes="page", id="page-install"):
+                    yield Static("Building Jervis", classes="title")
+                    yield LoadingIndicator()
+                    yield Static("Preparing…", id="progress-status")
+                    yield Static("", id="progress-detail")
+                    yield ProgressBar(total=TOTAL_STEPS, show_eta=False, id="progress")
+                    yield Static("", id="error-mark")
+                    yield Static("", id="done-mark")
+                    yield Button("Continue to OpenClaw sign-in", id="auth-button", variant="primary")
+                    yield Button("Finish", id="finish-button", variant="primary")
+
+            with Horizontal(id="nav"):
+                yield Button("Back", id="back")
+                yield Button("Next", id="next", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#auth-button", Button).display = False
+        self.query_one("#finish-button", Button).display = False
+        self.set_interval(0.14, self._pulse_tick)
+        self._render_stepbar()
+
+    def _pulse_tick(self) -> None:
+        self.pulse_index = (self.pulse_index + 1) % len(self.pulse_frames)
+        self.query_one("#pulse", Static).update(self.pulse_frames[self.pulse_index])
+
+    def _platform_summary(self) -> str:
+        return (
+            platform.system()
+            + " "
+            + platform.release()
+            + "  ·  "
+            + platform.machine()
+            + "  ·  Python "
+            + platform.python_version()
         )
-        if users and has_passphrase:
+
+    def _render_stepbar(self) -> None:
+        parts = []
+        for index, name in enumerate(self.STEPS):
+            if index < self.step:
+                parts.append("✓ " + name)
+            elif index == self.step:
+                parts.append("● " + name)
+            else:
+                parts.append("○ " + name)
+        self.query_one("#stepbar", Static).update("   ".join(parts))
+
+    def _switch(self, step: int) -> None:
+        self.step = max(0, min(step, len(self.STEPS) - 1))
+        self.query_one("#pages", ContentSwitcher).current = [
+            "page-mode",
+            "page-brain",
+            "page-audio",
+            "page-identity",
+            "page-review",
+            "page-install",
+        ][self.step]
+        self.query_one("#back", Button).display = self.step not in {0, 5}
+        self.query_one("#next", Button).display = self.step < 4
+        self._render_stepbar()
+
+    def _save_page(self) -> bool:
+        try:
+            if self.step == 0:
+                self.plan.mode = str(self.query_one("#mode", Select).value)
+                if self.plan.mode == "server":
+                    self.query_one("#autostart", Switch).value = True
+            elif self.step == 1:
+                self.plan.openclaw_auth = str(
+                    self.query_one("#openclaw-auth", Select).value
+                )
+                self.plan.install_openclaw = bool(
+                    self.query_one("#openclaw-install", Switch).value
+                )
+            elif self.step == 2:
+                mic_value = self.query_one("#microphone", Select).value
+                output_value = self.query_one("#output", Select).value
+                if mic_value is Select.NULL:
+                    raise ValueError("Choose a microphone.")
+                if output_value is Select.NULL:
+                    raise ValueError("Choose an output device.")
+                mic = str(mic_value)
+                if mic.startswith("desktop:"):
+                    self.plan.source_kind = "desktop"
+                    self.plan.input_device = int(mic.split(":", 1)[1])
+                    self.plan.android_serial = None
+                else:
+                    self.plan.source_kind = "android"
+                    self.plan.input_device = None
+                    serial = mic.split(":", 1)[1]
+                    self.plan.android_serial = None if serial == "auto" else serial
+                self.plan.output_device = int(output_value)
+                self.plan.start_at_boot = (
+                    True
+                    if self.plan.mode == "server"
+                    else bool(self.query_one("#autostart", Switch).value)
+                )
+            elif self.step == 3:
+                name = self.query_one("#owner-name", Input).value.strip()
+                first = self.query_one("#passphrase", Input).value
+                second = self.query_one("#passphrase-confirm", Input).value
+                if first != second:
+                    raise ValueError("The passphrases do not match.")
+                self.plan.owner_name = name
+                self.plan.honorific = str(
+                    self.query_one("#honorific", Select).value
+                )
+                self.plan.passphrase = first
+                self.plan.validate()
+            return True
+        except Exception as exc:
+            self.notify(str(exc), title="Check this step", severity="warning")
+            return False
+
+    def _update_review(self) -> None:
+        microphone = (
+            "Android phone"
+            if self.plan.source_kind == "android"
+            else "Computer microphone #" + str(self.plan.input_device)
+        )
+        brain = {
+            "codex": "ChatGPT / Codex subscription",
+            "api-key": "OpenAI API key",
+            "full": "Full OpenClaw setup",
+            "later": "Configure later",
+        }[self.plan.openclaw_auth]
+        lines = [
+            "[b]Mode[/b]           " + self.plan.mode.title(),
+            "[b]Brain[/b]          " + brain,
+            "[b]Microphone[/b]     " + microphone,
+            "[b]Output[/b]         Device #" + str(self.plan.output_device),
+            "[b]Start at boot[/b]  " + ("Yes" if self.plan.start_at_boot else "No"),
+            "[b]Owner[/b]          " + self.plan.owner_name,
+            "[b]Address as[/b]     " + ("Ma'am" if self.plan.honorific == "maam" else "Sir"),
+            "[b]Passphrase[/b]     ••••••••••••",
+        ]
+        self.query_one("#review", Static).update("\n".join(lines))
+
+    @on(Button.Pressed, "#next")
+    def next_page(self) -> None:
+        if self.step == 4:
+            self.start_install()
             return
+        if not self._save_page():
+            return
+        if self.step == 3:
+            self._update_review()
+        self._switch(self.step + 1)
 
-        if users:
-            owner = next(
-                (user for user in users if str(user["role"]) == "owner"),
-                users[0],
+    @on(Button.Pressed, "#back")
+    def back_page(self) -> None:
+        self._switch(self.step - 1)
+
+    @on(Button.Pressed, "#test-output")
+    def test_output_pressed(self) -> None:
+        self.test_output()
+
+    @work(thread=True, exclusive=True, group="audio-test")
+    def test_output(self) -> None:
+        value = self.query_one("#output", Select).value
+        if value is Select.NULL:
+            self.call_from_thread(
+                self.notify,
+                "Choose an output device first.",
+                title="Audio",
+                severity="warning",
             )
-            print()
-            print(
-                color(
-                    "Authentication passphrase is missing; repairing it for "
-                    + str(owner["name"])
-                    + ".",
-                    YELLOW,
+            return
+        try:
+            import sounddevice as sd
+
+            rate = 16000
+            timeline = np.arange(int(rate * 0.25), dtype=np.float32) / rate
+            tone = (0.12 * np.sin(2 * np.pi * 440 * timeline)).astype(np.float32)
+            sd.play(tone, samplerate=rate, device=int(value))
+            sd.wait()
+            self.call_from_thread(self.notify, "Speaker test complete.", title="Audio")
+        except Exception as exc:
+            self.call_from_thread(
+                self.notify,
+                str(exc),
+                title="Speaker test failed",
+                severity="error",
+            )
+
+    @on(Button.Pressed, "#test-mic")
+    def test_mic_pressed(self) -> None:
+        self.test_microphone()
+
+    @work(thread=True, exclusive=True, group="audio-test")
+    def test_microphone(self) -> None:
+        value = self.query_one("#microphone", Select).value
+        if value is Select.NULL or not str(value).startswith("desktop:"):
+            self.call_from_thread(
+                self.notify,
+                "Select a computer microphone to run this quick test.",
+                title="Audio",
+                severity="warning",
+            )
+            return
+        try:
+            import sounddevice as sd
+
+            rate = 16000
+            device = int(str(value).split(":", 1)[1])
+            recording = sd.rec(
+                int(rate * 0.5),
+                samplerate=rate,
+                channels=1,
+                dtype="float32",
+                device=device,
+            )
+            sd.wait()
+            level = float(np.sqrt(np.mean(np.square(recording), dtype=np.float64)))
+            self.call_from_thread(
+                self.notify,
+                "Microphone RMS " + format(level, ".4f"),
+                title="Audio",
+                severity="information" if level > 0.002 else "warning",
+            )
+        except Exception as exc:
+            self.call_from_thread(
+                self.notify,
+                str(exc),
+                title="Microphone test failed",
+                severity="error",
+            )
+
+    @on(Button.Pressed, "#auth-button")
+    def auth_button_pressed(self) -> None:
+        if not self.outcome or not self.outcome.openclaw_cli:
+            self._show_done()
+            return
+        try:
+            self.notify(
+                "Jervis is temporarily handing the terminal to OpenClaw for the sign-in step.",
+                title="OpenClaw",
+            )
+            with self.suspend():
+                configure_mode(
+                    Path(self.outcome.openclaw_cli),
+                    self.plan.mode,
+                    self.plan.openclaw_auth,
                 )
+        except Exception as exc:
+            self.query_one("#error-mark", Static).update(
+                "OpenClaw sign-in did not finish\n" + str(exc)
             )
-        else:
-            print()
-            print(color("First user", BLUE))
-            name = input("Your name: ").strip()
-            if not name:
-                raise RuntimeError("owner name cannot be empty")
-            honorific = ["sir", "maam"][
-                choose(
-                    "How should Jervis address you?",
-                    ["Sir", "Ma'am"],
-                )
-            ]
-            user_id = secrets.token_hex(8)
-            state.upsert_user(
-                user_id,
-                name,
-                honorific,
-                "owner",
-            )
-            state.set_kv("owner_user_id", user_id)
+            return
+        self._show_done()
 
-        while True:
-            first = getpass.getpass(
-                "Create the Jervis authentication passphrase: "
-            )
-            second = getpass.getpass("Confirm passphrase: ")
-            if first != second:
-                print("Passphrases do not match.")
-                continue
-            if len(first) < 8:
-                print("Use at least 8 characters.")
-                continue
-            break
+    @on(Button.Pressed, "#finish-button")
+    def finish_pressed(self) -> None:
+        self.exit()
 
-        state.set_kv(
-            "auth.passphrase_hash",
-            hash_passphrase(first),
+    def action_back(self) -> None:
+        if 0 < self.step < 5:
+            self._switch(self.step - 1)
+
+    def action_previous_control(self) -> None:
+        self.screen.focus_previous()
+
+    def action_next_control(self) -> None:
+        self.screen.focus_next()
+
+    def _resolve_launcher(self) -> Path:
+        override = os.environ.get("JERVIS_LAUNCHER_PATH")
+        if override:
+            return Path(override)
+        found = shutil.which("jervis")
+        if found:
+            return Path(found)
+        candidate = Path(os.environ.get("PYTHONEXECUTABLE", ""))
+        if candidate.exists():
+            return candidate
+        raise RuntimeError("Jervis launcher could not be located.")
+
+    def start_install(self) -> None:
+        try:
+            self.plan.validate()
+        except Exception as exc:
+            self.notify(str(exc), title="Review", severity="warning")
+            return
+        self._switch(5)
+        self.query_one("#progress", ProgressBar).update(progress=0)
+        self.perform_install()
+
+    @work(thread=True, exclusive=True, group="install")
+    def perform_install(self) -> None:
+        try:
+            launcher = self._launcher_from_environment()
+            outcome = run_install(
+                self.plan,
+                launcher,
+                self._progress_from_worker,
+            )
+        except Exception as exc:
+            self.call_from_thread(self._install_failed, str(exc))
+            return
+        self.call_from_thread(self._install_complete, outcome)
+
+    def _launcher_from_environment(self) -> Path:
+        override = os.environ.get("JERVIS_LAUNCHER_PATH")
+        if override:
+            return Path(override)
+        found = shutil.which("jervis")
+        if found:
+            return Path(found)
+        raise RuntimeError("Jervis launcher could not be located.")
+
+    def _progress_from_worker(
+        self,
+        step: int,
+        total: int,
+        title: str,
+        detail: str,
+    ) -> None:
+        self.call_from_thread(self._update_progress, step, total, title, detail)
+
+    def _update_progress(
+        self,
+        step: int,
+        total: int,
+        title: str,
+        detail: str,
+    ) -> None:
+        self.query_one("#progress", ProgressBar).update(total=total, progress=step)
+        self.query_one("#progress-status", Static).update(title)
+        self.query_one("#progress-detail", Static).update(detail)
+
+    def _install_failed(self, message: str) -> None:
+        self.query_one(LoadingIndicator).display = False
+        self.query_one("#error-mark", Static).update(
+            "Installation stopped safely\n" + message
         )
-    finally:
-        state.close()
+        self.query_one("#progress-status", Static).update("Nothing half-installed was left active.")
+        self.query_one("#progress-detail", Static).update(
+            "Fix the issue, then run the installer again."
+        )
+        self.query_one("#back", Button).display = True
 
+    def _install_complete(self, outcome: InstallOutcome) -> None:
+        self.outcome = outcome
+        self.query_one(LoadingIndicator).display = False
+        self.query_one("#progress", ProgressBar).update(
+            total=TOTAL_STEPS,
+            progress=TOTAL_STEPS,
+        )
+        if outcome.warnings:
+            self.query_one("#progress-detail", Static).update(
+                "\n".join("• " + item for item in outcome.warnings)
+            )
+        needs_auth = bool(
+            outcome.openclaw_cli
+            and self.plan.openclaw_auth != "later"
+        )
+        if needs_auth:
+            self.query_one("#progress-status", Static).update(
+                "Jervis is installed. One sign-in remains."
+            )
+            self.query_one("#auth-button", Button).display = True
+        else:
+            self._show_done()
 
-def resolve_launcher() -> Path:
-    override = os.environ.get("JERVIS_LAUNCHER_PATH")
-    if override:
-        return Path(override)
-    found = shutil.which("jervis")
-    if found:
-        return Path(found)
-    candidate = Path(sys.executable).with_name("jervis.exe" if os.name == "nt" else "jervis")
-    if candidate.exists():
-        return candidate
-    raise RuntimeError("could not locate the Jervis launcher")
+    def _show_done(self) -> None:
+        self.query_one("#auth-button", Button).display = False
+        self.query_one("#progress-status", Static).update("Installation complete")
+        self.query_one("#done-mark", Static).update(
+            "✓ JERVIS 7.1 IS ONLINE\nRun  jervis doctor  any time for a health check."
+        )
+        self.query_one("#finish-button", Button).display = True
 
 
 def install() -> None:
-    header()
-    system = platform.system()
-    if system not in {"Linux", "Darwin", "Windows"}:
-        raise RuntimeError("unsupported operating system: " + system)
-
-    print(color("  ✓ " + system + " " + platform.release() + " detected", GREEN))
-    print(color("  ✓ " + platform.machine() + " architecture", GREEN))
-    print(color("  ✓ Python " + platform.python_version(), GREEN))
-    print()
-
-    mode = ["desktop", "server"][choose("Installation type", ["Desktop", "Server"])]
-    cli = setup_openclaw(mode)
-
-    config = json.loads(json.dumps(DEFAULT_CONFIG))
-    config["install"]["mode"] = mode
-    config["install"]["start_at_boot"] = (
-        True if mode == "server" else yes_no("Start Jervis automatically when you sign in?")
-    )
-    pick_audio(config)
-
-    paths = Paths.resolve()
-    paths.ensure()
-    if config["identity"].get("enabled", True):
-        if ensure_speaker_model(paths.data / "models" / "speaker.onnx", progress):
-            print(color("  ✓ Local speaker-recognition model verified", GREEN))
-        else:
-            print(
-                color(
-                    "  ! Speaker model download failed; trusted sessions and TUI auth still work.",
-                    YELLOW,
-                )
-            )
-    config_path = paths.config / "config.json"
-    database_path = paths.data / "jervis.sqlite3"
-    adapter = current_platform()
-
-    previous_config = None
-    if config_path.exists():
-        try:
-            previous_config = load(config_path)
-        except Exception:
-            previous_config = None
-
-    with InstallTransaction(adapter) as transaction:
-        transaction.track_file(config_path)
-        transaction.track_file(database_path)
-        transaction.track_file(Path(str(database_path) + "-wal"))
-        transaction.track_file(Path(str(database_path) + "-shm"))
-
-        existing_service = False
-        try:
-            existing_service = bool(adapter.service_health().ok)
-        except Exception:
-            existing_service = False
-
-        def restore_previous_service() -> None:
-            adapter.remove_service()
-            if existing_service:
-                previous_mode = (
-                    previous_config["install"]["mode"]
-                    if previous_config is not None
-                    else "desktop"
-                )
-                adapter.install_service(
-                    resolve_launcher(),
-                    paths.service_environment(),
-                    mode=previous_mode,
-                )
-
-        if existing_service or config["install"]["start_at_boot"]:
-            transaction.mark_service_changed(
-                restore_previous_service if existing_service else None
-            )
-
-        if existing_service:
-            adapter.remove_service()
-
-        save(config_path, config)
-        load(config_path)
-        setup_owner(paths, config)
-
-        if config["install"]["start_at_boot"]:
-            adapter.install_service(
-                resolve_launcher(),
-                paths.service_environment(),
-                mode=mode,
-            )
-
-        transaction.commit()
-
-    print()
-    print(color("  ✓ Jervis configuration verified", GREEN))
-    if config["install"]["start_at_boot"]:
-        print(color("  ✓ Startup integration configured", GREEN))
-    if cli:
-        healthy, detail = openclaw_doctor(cli)
-        if healthy:
-            print(color("  ✓ OpenClaw doctor passed", GREEN))
-        else:
-            print(color("  ! OpenClaw doctor reported warnings", YELLOW))
-            if detail:
-                print(color("    Run openclaw doctor for details.", DIM))
-    print()
-    print(color("Jervis setup is complete.", BLUE))
-    print("Run jervis doctor to verify the full installation.")
+    """Launch the full-screen Jervis installer."""
+    JervisInstaller().run(mouse=True)
 
 
 def main() -> None:
     try:
         install()
     except KeyboardInterrupt:
-        print("\nInstallation cancelled.")
-        raise SystemExit(130)
+        return
     except Exception as exc:
-        print(color("\nInstallation failed: " + str(exc), RED))
-        raise SystemExit(1)
+        print("Jervis installer could not start: " + str(exc))
+
+
+if __name__ == "__main__":
+    main()
