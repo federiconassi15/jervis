@@ -26,3 +26,14 @@ def test_all_platform_capabilities_are_complete():
 def test_platform_quoting_helpers():
     assert _unit_quote('a"b') == '"a\\\"b"'
     assert _ps_quote("a'b") == "'a''b'"
+
+
+def test_windows_task_argument_uses_cmd_double_quotes():
+    wrapper = r"C:\\Program Files\\Jervis\\jervis-service.cmd"
+    script = (
+        "$wrapper=" + _ps_quote(wrapper) + ";"
+        "$argument='/d /s /c ""' + $wrapper + '""';"
+    )
+    assert "\\\"" not in script
+    assert "/d /s /c" in script
+    assert "jervis-service.cmd" in script

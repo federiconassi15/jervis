@@ -66,7 +66,7 @@ class WindowsPlatform(PlatformAdapter):
 
         action = (
             "$wrapper=" + _ps_quote(str(wrapper)) + ";"
-            "$argument='/d /s /c \"' + $wrapper + '\"';"
+            "$argument='/d /s /c ""' + $wrapper + '""';"
             "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $argument;"
         )
         trigger = "$t=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
