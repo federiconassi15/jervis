@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import concurrent.futures
 import queue
 import threading
 import time
@@ -96,6 +97,10 @@ class Runtime:
             self.state,
             self.config["proactive"],
             lambda message: self.speak(message),
+        )
+        self._inference_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="jervis-infer",
         )
         self.running = True
         self._audio = None
@@ -495,31 +500,38 @@ class Runtime:
                 if command_audio.size < self.config["audio"]["sample_rate"] * 0.25:
                     continue
 
-                self.activity("Transcribing command")
-                command = self.stt.transcribe(
+                self.activity("Understanding command")
+                stt_future = self._inference_pool.submit(
+                    self.stt.transcribe,
                     command_audio,
                     self.config["assistant"]["language"],
                 )
+                identity_future = self._inference_pool.submit(
+                    self.identity.identify,
+                    command_audio,
+                    self.config["audio"]["sample_rate"],
+                )
+                command = stt_future.result()
+                identity = identity_future.result()
                 if not command:
                     self.speak("I didn't catch that.")
                     continue
 
-                identity = self.identity.identify(
-                    command_audio,
-                    self.config["audio"]["sample_rate"],
-                )
-
                 if identity.needs_retry:
                     self.speak("One more time, boss?")
                     retry = self.capture(audio)
-                    retry_text = self.stt.transcribe(
+                    retry_stt = self._inference_pool.submit(
+                        self.stt.transcribe,
                         retry,
                         self.config["assistant"]["language"],
                     )
-                    again = self.identity.identify(
+                    retry_identity = self._inference_pool.submit(
+                        self.identity.identify,
                         retry,
                         self.config["audio"]["sample_rate"],
                     )
+                    retry_text = retry_stt.result()
+                    again = retry_identity.result()
                     if again.authenticated and again.user_id:
                         identity = again
                         command = retry_text or command
