@@ -13,6 +13,7 @@ MODULES = [
     "jervis.config",
     "jervis.doctor",
     "jervis.identity",
+    "jervis.fast",
     "jervis.install_tx",
     "jervis.installer",
     "jervis.models",

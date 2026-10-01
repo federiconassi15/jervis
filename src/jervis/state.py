@@ -118,7 +118,8 @@ class State:
                 self._db.close()
 
     def _prune_events(self, *, force: bool = False) -> None:
-        if not force and self._events_since_prune < self.PRUNE_EVERY:
+        threshold = min(self.PRUNE_EVERY, max(1, self.max_events // 4))
+        if not force and self._events_since_prune < threshold:
             return
         self._db.execute(
             "DELETE FROM events WHERE id <= COALESCE(("
@@ -129,7 +130,8 @@ class State:
         self._events_since_prune = 0
 
     def _prune_dialogue(self, *, force: bool = False) -> None:
-        if not force and self._dialogue_since_prune < self.PRUNE_EVERY:
+        threshold = min(self.PRUNE_EVERY, max(1, self.max_dialogue // 4))
+        if not force and self._dialogue_since_prune < threshold:
             return
         self._db.execute(
             "DELETE FROM dialogue WHERE id <= COALESCE(("

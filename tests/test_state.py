@@ -50,3 +50,20 @@ def test_per_user_memory_and_presence(tmp_path):
         assert state.memory("u1", "coffee") is None
     finally:
         state.close()
+
+
+def test_context_snapshot_batches_user_memory_dialogue_and_agent(tmp_path):
+    state = State(tmp_path / "state.sqlite3")
+    try:
+        state.upsert_user("u1", "Alex", "sir", "owner")
+        state.remember("u1", "music", "synthwave")
+        state.dialogue("Alex", "hello", "u1")
+        state.set_kv("brain.agent.u1", "ops")
+
+        snapshot = state.context_snapshot("u1")
+        assert snapshot["user"]["name"] == "Alex"
+        assert snapshot["memories"][0]["value"] == "synthwave"
+        assert snapshot["dialogue"][0]["text"] == "hello"
+        assert snapshot["agent"] == "ops"
+    finally:
+        state.close()

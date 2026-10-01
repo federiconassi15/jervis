@@ -189,5 +189,8 @@ class BrainRouter:
             "jervis:" + user_id,
             thinking=thinking,
         )
-        self.state.event("brain_transport", self.brain.last_transport)
+        self.state.event(
+            "brain_transport",
+            str(getattr(self.brain, "last_transport", "unknown")),
+        )
         return RouteReply(reply.ok, reply.text, route_name, reply.error)
