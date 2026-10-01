@@ -92,14 +92,13 @@ else:
     if len(versions) != 1:
         ERRORS.append("version mismatch: " + repr(sorted(versions)))
 
-if "def source_version(" not in bootstrap_text:
-    ERRORS.append("bootstrap must derive its patch version from packaged source")
+for required in ("install.sh", "install.ps1"):
+    if not (ROOT / required).is_file():
+        ERRORS.append(required + " is missing")
 
-wiki_dir = ROOT / "docs" / "wiki"
-if wiki_dir.exists():
-    wiki_pages = list(wiki_dir.glob("*.md"))
-    if len(wiki_pages) < 350:
-        ERRORS.append("docs/wiki contains only " + str(len(wiki_pages)) + " pages")
+for obsolete in ("bootstrap.py", "install.py"):
+    if (ROOT / obsolete).exists():
+        ERRORS.append(obsolete + " is obsolete; native bootstrap scripts are canonical")
 
 if ERRORS:
     print("\n".join(ERRORS))
