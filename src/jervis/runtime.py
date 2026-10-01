@@ -11,6 +11,8 @@ from .brain import OpenClawBrain
 from .config import load
 from .identity import IdentityManager
 from .paths import Paths
+from .presence import PresenceManager
+from .router import BrainRouter
 from .sessions import SessionManager
 from .speaker import SpeakerRecognizer
 from .speech import AdaptiveVAD, LazyWhisper, TTS, WakeDetector
@@ -76,6 +78,11 @@ class Runtime:
             brain["agent"],
             brain["timeout_seconds"],
             brain["thinking"],
+        )
+        self.router = BrainRouter(self.state, self.paths, self.brain)
+        self.presence = PresenceManager(
+            self.state,
+            self.config["presence"]["timeout_seconds"],
         )
         self.running = True
         self._audio = None
@@ -149,8 +156,14 @@ class Runtime:
         if log_user:
             self.state.dialogue(name, text, user_id)
 
-        self.activity("Thinking — OpenClaw")
-        reply = self.brain.ask(text, "jervis:" + user_id)
+        self.activity("Routing command")
+        reply = self.router.ask(
+            text,
+            user_id,
+            authenticated=True,
+            context={"runtime": self, "user_id": user_id},
+        )
+        self.state.set_kv("brain.last_route", reply.route)
         if reply.ok:
             self.speak(reply.text, user_id)
         else:
@@ -326,6 +339,8 @@ class Runtime:
                     frame = audio.read(timeout=1.0)
                 except queue.Empty:
                     self.stt.maybe_unload()
+                    if self.config["presence"]["enabled"]:
+                        self.presence.sweep()
                     continue
 
                 if not self.wake.process(frame):
@@ -383,6 +398,10 @@ class Runtime:
                 user_id = identity.user_id
                 if user_id is None:
                     continue
+
+                if self.config["presence"]["enabled"]:
+                    confidence = float(getattr(identity.match, "score", 1.0) or 1.0)
+                    self.presence.seen(user_id, "voice", confidence)
 
                 quality = quality_score(command_audio)
                 if (
