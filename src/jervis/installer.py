@@ -85,6 +85,33 @@ class JervisInstaller(App[int]):
         border-bottom: solid #0b3852;
     }
 
+    #system-line {
+        height: 1;
+        content-align: center middle;
+        color: #2d91b8;
+    }
+
+    #context {
+        min-height: 3;
+        border: round #0f4d70;
+        background: #03131f;
+        color: #8ccde8;
+        padding: 0 2;
+        margin: 1 0;
+    }
+
+    #nav-hint {
+        width: 1fr;
+        color: #527c91;
+        content-align: left middle;
+    }
+
+    #audio-meter {
+        height: 3;
+        color: #75dfff;
+        content-align: center middle;
+    }
+
     #pages {
         height: 1fr;
         overflow: hidden;
@@ -210,7 +237,18 @@ class JervisInstaller(App[int]):
         self.core_installed = False
         self.tagline = random.choice(BANTER)
         self.pulse_frames = ["◐", "◓", "◑", "◒"]
+        self.scan_frames = ["·", "•", "◆", "•"]
+        self.hero_frames = [
+            "J  E  R  V  I  S",
+            "J · E · R · V · I · S",
+            "J  E  R  V  I  S",
+            "J › E › R › V › I › S",
+        ]
         self.pulse_index = 0
+        self.animation_tick = 0
+        self.transition_ticks = 0
+        self.progress_title = "Preparing…"
+        self.progress_detail = ""
         self.inputs, self.outputs, self.androids = self._detect_audio()
         self.openclaw = find_openclaw()
 
@@ -274,6 +312,7 @@ class JervisInstaller(App[int]):
                 )
             yield Static("“" + self.tagline + "”", id="tagline")
             yield Static("", id="stepbar")
+            yield Static("SYSTEM CHECK · READY", id="system-line")
 
             with ContentSwitcher(initial="page-mode", id="pages"):
                 with VerticalScroll(classes="page", id="page-mode"):
@@ -296,6 +335,7 @@ class JervisInstaller(App[int]):
                         self._platform_summary(),
                         classes="card",
                     )
+                    yield Static("", id="context")
 
                 with VerticalScroll(classes="page", id="page-brain"):
                     yield Static("Connect the OpenClaw brain", classes="title")
@@ -351,6 +391,7 @@ class JervisInstaller(App[int]):
                     with Horizontal():
                         yield Button("Test microphone", id="test-mic")
                         yield Button("Test speakers", id="test-output")
+                    yield Static("MIC LEVEL  ·  not tested", id="audio-meter")
                     with Horizontal(classes="card"):
                         yield Label("Start Jervis automatically")
                         yield Switch(value=True, id="autostart")
@@ -403,18 +444,53 @@ class JervisInstaller(App[int]):
                     yield Button("Finish", id="finish-button", variant="primary")
 
             with Horizontal(id="nav"):
+                yield Static("↑↓ select/control   ← back   → next   mouse enabled", id="nav-hint")
                 yield Button("Back", id="back")
                 yield Button("Next", id="next", variant="primary")
 
     def on_mount(self) -> None:
         self.query_one("#auth-button", Button).display = False
         self.query_one("#finish-button", Button).display = False
-        self.set_interval(0.14, self._pulse_tick)
+        self.set_interval(0.12, self._pulse_tick)
         self._render_stepbar()
+        self._refresh_context()
+        self.query_one("#mode", Select).focus()
 
     def _pulse_tick(self) -> None:
+        self.animation_tick += 1
         self.pulse_index = (self.pulse_index + 1) % len(self.pulse_frames)
         self.query_one("#pulse", Static).update(self.pulse_frames[self.pulse_index])
+
+        hero = self.hero_frames[(self.animation_tick // 2) % len(self.hero_frames)]
+        self.query_one("#hero", Static).update(
+            hero + "\nINTELLIGENT SYSTEMS INSTALLER"
+        )
+
+        scan = self.scan_frames[self.animation_tick % len(self.scan_frames)]
+        if self.transition_ticks > 0:
+            self.transition_ticks -= 1
+            self.query_one("#system-line", Static).update(
+                scan + " SYNCHRONIZING INTERFACE " + scan
+            )
+        elif self.step == 5 and not self.core_installed:
+            self.query_one("#system-line", Static).update(
+                scan + " BUILD SEQUENCE ACTIVE " + scan
+            )
+            self.query_one("#progress-status", Static).update(
+                scan + "  " + self.progress_title
+            )
+        elif self.core_installed:
+            self.query_one("#system-line", Static).update(
+                "● CORE ONLINE · INSTALL VERIFIED"
+            )
+        else:
+            self.query_one("#system-line", Static).update(
+                scan + " SYSTEM CHECK · READY " + scan
+            )
+
+        if self.animation_tick % 80 == 0 and self.step < 5:
+            self.tagline = random.choice(BANTER)
+            self.query_one("#tagline", Static).update("“" + self.tagline + "”")
 
     def _platform_summary(self) -> str:
         return (
@@ -425,6 +501,52 @@ class JervisInstaller(App[int]):
             + platform.machine()
             + "  ·  bundled runtime"
         )
+
+    def _refresh_context(self) -> None:
+        if not self.is_mounted:
+            return
+
+        if self.step == 0:
+            mode = str(self.query_one("#mode", Select).value)
+            text = (
+                "DESKTOP PROFILE  ·  interactive audio session · normal login startup"
+                if mode == "desktop"
+                else "SERVER PROFILE  ·  persistent startup · explicit always-on hardware"
+            )
+        elif self.step == 1:
+            auth = str(self.query_one("#openclaw-auth", Select).value)
+            labels = {
+                "codex": "ChatGPT/Codex subscription · guided sign-in",
+                "api-key": "OpenAI API key · provider credential setup",
+                "full": "Full OpenClaw onboarding · alternate providers supported",
+                "later": "Brain setup deferred · local Jervis remains usable",
+            }
+            text = "BRAIN LINK  ·  " + labels.get(auth, "select an authentication mode")
+        elif self.step == 2:
+            mic = self.query_one("#microphone", Select).value
+            out = self.query_one("#output", Select).value
+            mic_text = "waiting for microphone" if mic is Select.NULL else str(mic)
+            out_text = "waiting for output" if out is Select.NULL else "output #" + str(out)
+            text = "AUDIO ROUTE  ·  " + mic_text + "  →  " + out_text
+        elif self.step == 3:
+            name = self.query_one("#owner-name", Input).value.strip() or "owner not named yet"
+            honorific = str(self.query_one("#honorific", Select).value)
+            text = (
+                "LOCAL IDENTITY  ·  "
+                + name
+                + " · address as "
+                + ("ma'am" if honorific == "maam" else "sir")
+                + " · passphrase encrypted locally"
+            )
+        elif self.step == 4:
+            text = "FINAL CHECK  ·  review every choice before transactional activation"
+        else:
+            text = "INSTALL CORE  ·  staged changes · health checks · automatic rollback on failure"
+
+        try:
+            self.query_one("#context", Static).update(text)
+        except Exception:
+            pass
 
     def _render_stepbar(self) -> None:
         parts = []
@@ -449,7 +571,21 @@ class JervisInstaller(App[int]):
         ][self.step]
         self.query_one("#back", Button).display = self.step not in {0, 5}
         self.query_one("#next", Button).display = self.step < 4
+        self.transition_ticks = 7
         self._render_stepbar()
+        self._refresh_context()
+        focus_targets = {
+            0: "#mode",
+            1: "#openclaw-auth",
+            2: "#microphone",
+            3: "#owner-name",
+        }
+        target = focus_targets.get(self.step)
+        if target:
+            try:
+                self.query_one(target).focus()
+            except Exception:
+                pass
 
     def _save_page(self) -> bool:
         try:
@@ -528,6 +664,21 @@ class JervisInstaller(App[int]):
         ]
         self.query_one("#review", Static).update("\n".join(lines))
 
+    @on(Select.Changed)
+    def selection_changed(self, event: Select.Changed) -> None:
+        del event
+        self._refresh_context()
+
+    @on(Switch.Changed)
+    def switch_changed(self, event: Switch.Changed) -> None:
+        del event
+        self._refresh_context()
+
+    @on(Input.Changed)
+    def input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "owner-name":
+            self._refresh_context()
+
     @on(Button.Pressed, "#next")
     def next_page(self) -> None:
         if self.step == 4:
@@ -596,7 +747,7 @@ class JervisInstaller(App[int]):
             rate = 16000
             device = int(str(value).split(":", 1)[1])
             recording = sd.rec(
-                int(rate * 0.5),
+                int(rate * 0.8),
                 samplerate=rate,
                 channels=1,
                 dtype="float32",
@@ -604,11 +755,24 @@ class JervisInstaller(App[int]):
             )
             sd.wait()
             level = float(np.sqrt(np.mean(np.square(recording), dtype=np.float64)))
+            blocks = min(16, max(0, int(level / 0.004)))
+            meter = "█" * blocks + "░" * (16 - blocks)
+            label = (
+                "GOOD"
+                if 0.008 <= level <= 0.35
+                else ("QUIET" if level < 0.008 else "LOUD")
+            )
+            self.call_from_thread(
+                self._update_mic_meter,
+                meter,
+                level,
+                label,
+            )
             self.call_from_thread(
                 self.notify,
-                "Microphone RMS " + format(level, ".4f"),
+                "Microphone test: " + label.lower(),
                 title="Audio",
-                severity="information" if level > 0.002 else "warning",
+                severity="information" if label == "GOOD" else "warning",
             )
         except Exception as exc:
             self.call_from_thread(
@@ -617,6 +781,11 @@ class JervisInstaller(App[int]):
                 title="Microphone test failed",
                 severity="error",
             )
+
+    def _update_mic_meter(self, meter: str, level: float, label: str) -> None:
+        self.query_one("#audio-meter", Static).update(
+            "MIC LEVEL  " + meter + "  " + label + "  ·  RMS " + format(level, ".4f")
+        )
 
     @on(Button.Pressed, "#auth-button")
     def auth_button_pressed(self) -> None:
@@ -669,18 +838,6 @@ class JervisInstaller(App[int]):
     def action_next_control(self) -> None:
         self.screen.focus_next()
 
-    def _resolve_launcher(self) -> Path:
-        override = os.environ.get("JERVIS_LAUNCHER_PATH")
-        if override:
-            return Path(override)
-        found = shutil.which("jervis")
-        if found:
-            return Path(found)
-        candidate = Path(os.environ.get("PYTHONEXECUTABLE", ""))
-        if candidate.exists():
-            return candidate
-        raise RuntimeError("Jervis launcher could not be located.")
-
     def start_install(self) -> None:
         try:
             self.plan.validate()
@@ -689,6 +846,9 @@ class JervisInstaller(App[int]):
             return
         self._switch(5)
         self.query_one("#progress", ProgressBar).update(progress=0)
+        self.progress_title = "Initializing transactional installer"
+        self.progress_detail = "Preparing staged changes and rollback checkpoints."
+        self.query_one("#progress-detail", Static).update(self.progress_detail)
         self.perform_install()
 
     @work(thread=True, exclusive=True, group="install")
@@ -730,9 +890,22 @@ class JervisInstaller(App[int]):
         title: str,
         detail: str,
     ) -> None:
+        self.progress_title = title
+        self.progress_detail = detail
         self.query_one("#progress", ProgressBar).update(total=total, progress=step)
-        self.query_one("#progress-status", Static).update(title)
-        self.query_one("#progress-detail", Static).update(detail)
+        self.query_one("#progress-status", Static).update(
+            self.scan_frames[self.animation_tick % len(self.scan_frames)]
+            + "  "
+            + title
+        )
+        self.query_one("#progress-detail", Static).update(
+            "["
+            + str(step)
+            + "/"
+            + str(total)
+            + "]  "
+            + detail
+        )
 
     def _install_failed(self, message: str) -> None:
         self.query_one(LoadingIndicator).display = False
