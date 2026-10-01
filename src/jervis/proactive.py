@@ -34,9 +34,30 @@ class ProactiveEngine:
         self.announce(message)
         return True
 
-    def queue(self, key: str, message: str) -> None:
-        self.state.set_kv(
-            "proactive.pending." + key,
-            {"message": message, "created_at": time.time()},
-        )
+    def queue(
+        self,
+        key: str,
+        message: str,
+        user_id: str | None = None,
+    ) -> int:
+        notification_id = self.state.notify(key, message, user_id)
         self.state.event("proactive_queued", key)
+        return notification_id
+
+    def tick(self) -> bool:
+        if not self.config.get("enabled", True) or self.quiet_now():
+            return False
+
+        present = self.state.presence(present_only=True)
+        if not present:
+            return False
+
+        user_id = str(present[0]["user_id"])
+        row = self.state.next_notification(user_id)
+        if row is None:
+            return False
+
+        self.state.mark_notification(int(row["id"]))
+        self.state.event("proactive_delivered", str(row["key"]))
+        self.announce(str(row["text"]))
+        return True
