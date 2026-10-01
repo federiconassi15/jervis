@@ -196,8 +196,8 @@ class JervisInstaller(App[int]):
     BINDINGS = [
         ("up", "previous_control", "Previous control"),
         ("down", "next_control", "Next control"),
-        ("left", "previous_control", "Previous control"),
-        ("right", "next_control", "Next control"),
+        ("left", "back", "Back"),
+        ("right", "forward", "Next"),
     ]
 
     STEPS = ["Mode", "Brain", "Audio", "Identity", "Review", "Install"]
@@ -655,6 +655,10 @@ class JervisInstaller(App[int]):
     def action_back(self) -> None:
         if 0 < self.step < 5:
             self._switch(self.step - 1)
+
+    def action_forward(self) -> None:
+        if self.step < 5:
+            self.next_page()
 
     def action_quit(self) -> None:
         self.exit(0 if self.core_installed else 130)
