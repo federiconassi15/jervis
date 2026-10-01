@@ -96,7 +96,6 @@ Jervis 7.1 identifies from the longer natural command rather than trying to auth
     jervis run
     jervis doctor
     jervis install
-    jervis doctor
     jervis repair audio
     jervis repair openclaw
     jervis update-check
