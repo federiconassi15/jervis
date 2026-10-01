@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - main
+      - "build/jervis-7.3"
     paths:
       - "docs/releases/*.md"
+      - ".github/workflows/sync-release-descriptions.yml"
   workflow_dispatch:
 
 permissions:
