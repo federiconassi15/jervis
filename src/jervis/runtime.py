@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from .audio import AndroidAudioSource, DesktopAudio
-from .audio.processing import quality_score
+from .audio.processing import analyze, quality_score
 from .brain import OpenClawBrain
 from .config import load
 from .identity import IdentityManager
@@ -403,7 +403,25 @@ class Runtime:
                     confidence = float(getattr(identity.match, "score", 1.0) or 1.0)
                     self.presence.seen(user_id, "voice", confidence)
 
-                quality = quality_score(command_audio)
+                audio_quality = analyze(command_audio)
+                self.state.set_kv(
+                    "audio.last_quality",
+                    {
+                        "rms": audio_quality.rms,
+                        "clipping": audio_quality.clipping,
+                        "score": audio_quality.score,
+                        "label": audio_quality.label,
+                    },
+                )
+                if audio_quality.score < 0.5:
+                    self.state.event(
+                        "audio_quality",
+                        audio_quality.label
+                        + " score="
+                        + format(audio_quality.score, ".2f"),
+                    )
+
+                quality = audio_quality.score
                 if (
                     self.config["identity"]["continuous_learning"]
                     and getattr(identity.match, "band", None)
