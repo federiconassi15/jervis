@@ -1,3 +1,4 @@
+from pathlib import PureWindowsPath
 import platform
 
 from jervis.platforms.factory import current_platform
@@ -30,7 +31,7 @@ def test_platform_quoting_helpers():
 
 
 def test_windows_task_argument_quotes_paths_with_spaces():
-    wrapper = r"C:\\Program Files\\Jervis\\jervis-service.cmd"
+    wrapper = PureWindowsPath(r"C:\Program Files\Jervis\jervis-service.cmd")
     argument = _cmd_argument(wrapper)
-    assert argument == '/d /c ""C:\\Program Files\\Jervis\\jervis-service.cmd""'
+    assert argument == r'/d /c ""C:\Program Files\Jervis\jervis-service.cmd""'
     assert "\\\"" not in argument
