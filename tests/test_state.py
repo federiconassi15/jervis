@@ -31,3 +31,22 @@ def test_kv_roundtrip(tmp_path):
         assert state.get_kv("missing", "fallback") == "fallback"
     finally:
         state.close()
+
+
+def test_per_user_memory_and_presence(tmp_path):
+    state = State(tmp_path / "state.sqlite3")
+    try:
+        state.upsert_user("u1", "Alex", "sir", "owner")
+        state.remember("u1", "coffee", {"order": "flat white"})
+        assert state.memory("u1", "coffee") == {"order": "flat white"}
+        assert state.memories("u1")[0]["key"] == "coffee"
+
+        state.set_presence("u1", "voice", 0.91, True)
+        present = state.presence(present_only=True)
+        assert len(present) == 1
+        assert present[0]["name"] == "Alex"
+
+        state.forget_memory("u1", "coffee")
+        assert state.memory("u1", "coffee") is None
+    finally:
+        state.close()
