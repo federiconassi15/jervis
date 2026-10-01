@@ -31,6 +31,7 @@ MODULES = [
     "jervis.sessions",
     "jervis.skills",
     "jervis.speaker",
+    "jervis.speaker_model",
     "jervis.speech.stt",
     "jervis.speech.tts",
     "jervis.speech.vad",

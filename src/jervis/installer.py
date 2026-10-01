@@ -23,6 +23,7 @@ from .paths import Paths
 from .platforms import current_platform
 from .prereqs import ensure_adb, ensure_linux_audio
 from .security import hash_passphrase
+from .speaker_model import ensure_speaker_model
 from .state import State
 
 BLUE = "\033[38;5;45m"
@@ -263,6 +264,16 @@ def install() -> None:
 
     paths = Paths.resolve()
     paths.ensure()
+    if config["identity"].get("enabled", True):
+        if ensure_speaker_model(paths.data / "models" / "speaker.onnx", progress):
+            print(color("  ✓ Local speaker-recognition model verified", GREEN))
+        else:
+            print(
+                color(
+                    "  ! Speaker model download failed; trusted sessions and TUI auth still work.",
+                    YELLOW,
+                )
+            )
     config_path = paths.config / "config.json"
     database_path = paths.data / "jervis.sqlite3"
     adapter = current_platform()

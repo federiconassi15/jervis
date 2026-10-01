@@ -2,7 +2,9 @@
   "version": 1,
   "assistant": {
     "name": "Jervis",
-    "wake_words": ["jervis"],
+    "wake_words": [
+      "jervis"
+    ],
     "wake_acknowledgement": "Boss?"
   },
   "audio": {
@@ -10,7 +12,9 @@
     "output_sink": "auto",
     "sample_rate_hz": 16000,
     "aec_enabled": true,
-    "auto_gain": true
+    "auto_gain": true,
+    "aec": false,
+    "jervis_volume": 1
   },
   "speech": {
     "language": "en",
