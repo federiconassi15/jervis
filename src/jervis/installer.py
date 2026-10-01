@@ -200,17 +200,53 @@ def setup_owner(paths: Paths, config: dict) -> None:
         config["privacy"]["max_event_rows"],
     )
     try:
-        if state.users():
+        users = state.users()
+        has_passphrase = isinstance(
+            state.get_kv("auth.passphrase_hash"),
+            str,
+        )
+        if users and has_passphrase:
             return
-        print()
-        print(color("First user", BLUE))
-        name = input("Your name: ").strip()
-        if not name:
-            raise RuntimeError("owner name cannot be empty")
-        honorific = ["sir", "maam"][choose("How should Jervis address you?", ["Sir", "Ma'am"])]
+
+        if users:
+            owner = next(
+                (user for user in users if str(user["role"]) == "owner"),
+                users[0],
+            )
+            print()
+            print(
+                color(
+                    "Authentication passphrase is missing; repairing it for "
+                    + str(owner["name"])
+                    + ".",
+                    YELLOW,
+                )
+            )
+        else:
+            print()
+            print(color("First user", BLUE))
+            name = input("Your name: ").strip()
+            if not name:
+                raise RuntimeError("owner name cannot be empty")
+            honorific = ["sir", "maam"][
+                choose(
+                    "How should Jervis address you?",
+                    ["Sir", "Ma'am"],
+                )
+            ]
+            user_id = secrets.token_hex(8)
+            state.upsert_user(
+                user_id,
+                name,
+                honorific,
+                "owner",
+            )
+            state.set_kv("owner_user_id", user_id)
 
         while True:
-            first = getpass.getpass("Create the Jervis authentication passphrase: ")
+            first = getpass.getpass(
+                "Create the Jervis authentication passphrase: "
+            )
             second = getpass.getpass("Confirm passphrase: ")
             if first != second:
                 print("Passphrases do not match.")
@@ -220,10 +256,10 @@ def setup_owner(paths: Paths, config: dict) -> None:
                 continue
             break
 
-        user_id = secrets.token_hex(8)
-        state.upsert_user(user_id, name, honorific, "owner")
-        state.set_kv("auth.passphrase_hash", hash_passphrase(first))
-        state.set_kv("owner_user_id", user_id)
+        state.set_kv(
+            "auth.passphrase_hash",
+            hash_passphrase(first),
+        )
     finally:
         state.close()
 
@@ -278,25 +314,57 @@ def install() -> None:
     database_path = paths.data / "jervis.sqlite3"
     adapter = current_platform()
 
+    previous_config = None
+    if config_path.exists():
+        try:
+            previous_config = load(config_path)
+        except Exception:
+            previous_config = None
+
     with InstallTransaction(adapter) as transaction:
         transaction.track_file(config_path)
         transaction.track_file(database_path)
         transaction.track_file(Path(str(database_path) + "-wal"))
         transaction.track_file(Path(str(database_path) + "-shm"))
 
+        existing_service = False
+        try:
+            existing_service = bool(adapter.service_health().ok)
+        except Exception:
+            existing_service = False
+
+        def restore_previous_service() -> None:
+            adapter.remove_service()
+            if existing_service:
+                previous_mode = (
+                    previous_config["install"]["mode"]
+                    if previous_config is not None
+                    else "desktop"
+                )
+                adapter.install_service(
+                    resolve_launcher(),
+                    paths.service_environment(),
+                    mode=previous_mode,
+                )
+
+        if existing_service or config["install"]["start_at_boot"]:
+            transaction.mark_service_changed(
+                restore_previous_service if existing_service else None
+            )
+
+        if existing_service:
+            adapter.remove_service()
+
         save(config_path, config)
         load(config_path)
         setup_owner(paths, config)
 
         if config["install"]["start_at_boot"]:
-            existing_service = False
-            try:
-                existing_service = bool(adapter.service_health().ok)
-            except Exception:
-                pass
-            if not existing_service:
-                adapter.install_service(resolve_launcher(), paths.service_environment(), mode=mode)
-                transaction.mark_service_changed()
+            adapter.install_service(
+                resolve_launcher(),
+                paths.service_environment(),
+                mode=mode,
+            )
 
         transaction.commit()
 

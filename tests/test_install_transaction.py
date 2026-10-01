@@ -41,6 +41,23 @@ def test_new_service_removed_on_rollback():
     assert platform.removed == 1
 
 
+def test_existing_service_restore_callback_runs():
+    platform = FakePlatform(active=True)
+    restored = []
+
+    try:
+        with InstallTransaction(platform) as transaction:
+            transaction.mark_service_changed(
+                lambda: restored.append("restored")
+            )
+            raise RuntimeError("boom")
+    except RuntimeError:
+        pass
+
+    assert restored == ["restored"]
+    assert platform.removed == 0
+
+
 def test_commit_keeps_changes(tmp_path):
     path = tmp_path / "config.json"
     path.write_text("before", encoding="utf-8")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -9,6 +10,7 @@ class InstallTransaction:
         self.files: dict[Path, bytes | None] = {}
         self.service_was_active = False
         self.service_changed = False
+        self.service_restore: Callable[[], None] | None = None
         self.committed = False
 
     def __enter__(self):
@@ -22,18 +24,26 @@ class InstallTransaction:
         if path not in self.files:
             self.files[path] = path.read_bytes() if path.exists() else None
 
-    def mark_service_changed(self) -> None:
+    def mark_service_changed(
+        self,
+        restore: Callable[[], None] | None = None,
+    ) -> None:
         self.service_changed = True
+        self.service_restore = restore
 
     def commit(self) -> None:
         self.committed = True
 
     def rollback(self) -> None:
-        if self.service_changed and not self.service_was_active:
+        if self.service_changed:
             try:
-                self.platform.remove_service()
+                if self.service_restore is not None:
+                    self.service_restore()
+                elif not self.service_was_active:
+                    self.platform.remove_service()
             except Exception:
                 pass
+
         for path, data in self.files.items():
             try:
                 if data is None:
