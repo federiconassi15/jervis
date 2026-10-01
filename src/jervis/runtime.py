@@ -1,6 +1,11 @@
-import queue,time
+from __future__ import annotations
+
+import queue
+import time
+
 import numpy as np
-from .audio import AndroidAudioSource,DesktopAudio
+
+from .audio import AndroidAudioSource, DesktopAudio
 from .audio.processing import quality_score
 from .brain import OpenClawBrain
 from .config import load
@@ -8,66 +13,411 @@ from .identity import IdentityManager
 from .paths import Paths
 from .sessions import SessionManager
 from .speaker import SpeakerRecognizer
-from .speech import AdaptiveVAD,LazyWhisper,TTS,WakeDetector
+from .speech import AdaptiveVAD, LazyWhisper, TTS, WakeDetector
 from .state import State
+
+
 class Runtime:
-    def __init__(self):
-        self.paths=Paths.resolve();self.paths.ensure();self.config=load(self.paths.config/"config.json")
-        privacy=self.config["privacy"];ident=self.config["identity"];speech=self.config["speech"];brain=self.config["brain"]
-        self.state=State(self.paths.data/"jervis.sqlite3",privacy["max_dialogue_rows"],privacy["max_event_rows"])
-        self.sessions=SessionManager(self.state,ident["trusted_session_seconds"],ident["inactivity_seconds"])
-        self.speaker=SpeakerRecognizer(self.state,ident,self.paths.data/"models/speaker.onnx")
-        self.identity=IdentityManager(self.state,self.sessions,self.speaker,ident)
-        self.stt=LazyWhisper(speech["stt_model"],speech["stt_device"],speech["compute_type"])
-        self.tts=TTS(speech["tts_backend"],speech["edge_voice"])
-        self.wake=WakeDetector(self.config["assistant"]["wake_word"],self.config["audio"]["sample_rate"])
-        self.vad=AdaptiveVAD();self.brain=OpenClawBrain(brain["agent"],brain["timeout_seconds"],brain["thinking"]);self.running=True
+    TRAINING_PHRASES = [
+        "Jervis, systems are online and ready.",
+        "The quick brown fox jumps over the lazy dog.",
+        "My voice should be recognized locally.",
+    ]
+
+    def __init__(self) -> None:
+        self.paths = Paths.resolve()
+        self.paths.ensure()
+        self.config = load(self.paths.config / "config.json")
+
+        privacy = self.config["privacy"]
+        identity_config = self.config["identity"]
+        speech = self.config["speech"]
+        brain = self.config["brain"]
+        audio = self.config["audio"]
+
+        self.state = State(
+            self.paths.data / "jervis.sqlite3",
+            privacy["max_dialogue_rows"],
+            privacy["max_event_rows"],
+        )
+        self.sessions = SessionManager(
+            self.state,
+            identity_config["trusted_session_seconds"],
+            identity_config["inactivity_seconds"],
+        )
+        self.speaker = SpeakerRecognizer(
+            self.state,
+            identity_config,
+            self.paths.data / "models" / "speaker.onnx",
+        )
+        self.identity = IdentityManager(
+            self.state,
+            self.sessions,
+            self.speaker,
+            identity_config,
+        )
+        self.stt = LazyWhisper(
+            speech["stt_model"],
+            speech["stt_device"],
+            speech["compute_type"],
+        )
+        self.tts = TTS(
+            speech["tts_backend"],
+            speech["edge_voice"],
+            output_device=audio.get("output_device"),
+            volume=audio.get("jervis_volume", 1.0),
+        )
+        self.wake = WakeDetector(
+            self.config["assistant"]["wake_word"],
+            audio["sample_rate"],
+        )
+        self.vad = AdaptiveVAD()
+        self.brain = OpenClawBrain(
+            brain["agent"],
+            brain["timeout_seconds"],
+            brain["thinking"],
+        )
+        self.running = True
+        self._audio = None
+        self.activity("Idle — waiting for Jervis")
+
+    def activity(self, text: str) -> None:
+        self.state.set_kv("activity", text)
+
     def source(self):
-        audio=self.config["audio"];src=audio["source"]
-        return AndroidAudioSource(src.get("android_serial"),audio["sample_rate"]) if src["kind"]=="android" else DesktopAudio(src.get("device"),audio.get("output_device"),audio["sample_rate"])
-    def capture(self,audio,first=None):
-        chunks=[] if first is None else [first];speaking=first is not None;silence=None;deadline=time.monotonic()+12
-        while self.running and time.monotonic()<deadline:
-            try:frame=audio.read()
-            except queue.Empty:continue
-            if self.vad.speech(frame):speaking=True;silence=None;chunks.append(frame)
+        audio = self.config["audio"]
+        source = audio["source"]
+        if source["kind"] == "android":
+            return AndroidAudioSource(
+                source.get("android_serial"),
+                audio["sample_rate"],
+            )
+        return DesktopAudio(
+            source.get("device"),
+            audio.get("output_device"),
+            audio["sample_rate"],
+        )
+
+    def capture(self, audio, first=None, max_seconds: float = 12.0) -> np.ndarray:
+        chunks = [] if first is None else [first]
+        speaking = first is not None
+        silence = None
+        deadline = time.monotonic() + float(max_seconds)
+
+        while self.running and time.monotonic() < deadline:
+            try:
+                frame = audio.read(timeout=min(1.0, max(0.05, deadline - time.monotonic())))
+            except queue.Empty:
+                continue
+
+            if self.vad.speech(frame):
+                speaking = True
+                silence = None
+                chunks.append(frame)
             elif speaking:
-                chunks.append(frame);silence=silence or time.monotonic()
-                if time.monotonic()-silence>=0.75:break
-        return np.concatenate(chunks) if chunks else np.zeros(0,dtype=np.float32)
-    def speak(self,text,user_id=None):self.state.dialogue("jervis",text,user_id);self.tts.speak(text)
-    def respond(self,text,user_id):
-        user=self.state.user(user_id);self.state.dialogue(str(user["name"]) if user else user_id,text,user_id)
-        reply=self.brain.ask(text,"jervis:"+user_id)
-        if reply.ok:self.speak(reply.text,user_id)
-        else:self.state.event("brain_error",reply.error);self.speak("My OpenClaw brain is unavailable, but I am still running locally.",user_id)
-    def run(self):
-        self.state.event("runtime_start","Jervis 7.1")
+                chunks.append(frame)
+                silence = silence or time.monotonic()
+                if time.monotonic() - silence >= 0.75:
+                    break
+
+        return (
+            np.concatenate(chunks)
+            if chunks
+            else np.zeros(0, dtype=np.float32)
+        )
+
+    def speak(self, text: str, user_id: str | None = None) -> None:
+        volume = float(
+            self.state.get_kv(
+                "audio.jervis_volume",
+                self.config["audio"].get("jervis_volume", 1.0),
+            )
+        )
+        self.tts.set_volume(volume)
+        self.state.dialogue("jervis", text, user_id)
+        self.activity("Speaking — " + text[:80])
+        self.tts.speak(text)
+        if self._audio is not None and hasattr(self._audio, "flush"):
+            try:
+                self._audio.flush()
+            except Exception:
+                pass
+
+    def respond(self, text: str, user_id: str, log_user: bool = True) -> None:
+        user = self.state.user(user_id)
+        name = str(user["name"]) if user else user_id
+        if log_user:
+            self.state.dialogue(name, text, user_id)
+
+        self.activity("Thinking — OpenClaw")
+        reply = self.brain.ask(text, "jervis:" + user_id)
+        if reply.ok:
+            self.speak(reply.text, user_id)
+        else:
+            self.state.event("brain_error", reply.error)
+            self.speak(
+                "My OpenClaw brain is unavailable, but I am still running locally.",
+                user_id,
+            )
+
+    def _consume_tui_grant(self) -> str | None:
+        grant = self.state.pop_kv("auth.tui_grant")
+        if not isinstance(grant, dict):
+            return None
+        try:
+            issued = float(grant["issued_at"])
+            user_id = str(grant["user_id"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if time.time() - issued > 120:
+            self.state.event("tui_auth_expired", "user=" + user_id)
+            return None
+        if self.state.user(user_id) is None:
+            return None
+        return user_id
+
+    @staticmethod
+    def _honorific_from_text(text: str) -> str | None:
+        cleaned = text.lower().replace("'", "").replace(".", " ").replace(",", " ")
+        words = set(cleaned.split())
+        if "sir" in words:
+            return "sir"
+        if "maam" in words or "madam" in words:
+            return "maam"
+        return None
+
+    @staticmethod
+    def _yes(text: str) -> bool:
+        lowered = text.strip().lower()
+        return lowered in {"yes", "yeah", "yep", "correct", "right", "yes please"}
+
+    def _onboard_if_needed(
+        self,
+        audio,
+        user_id: str,
+        seed_samples: list[np.ndarray] | None = None,
+    ) -> None:
+        user = self.state.user(user_id)
+        if user is None:
+            return
+
+        existing_embeddings = self.state.embeddings().get(user_id, [])
+        if not existing_embeddings:
+            self.speak("Let's train your voice so I can recognize you more reliably.", user_id)
+            accepted = 0
+            recordings = list(seed_samples or [])
+            for phrase in self.TRAINING_PHRASES:
+                self.speak("Please say: " + phrase, user_id)
+                sample = self.capture(audio, max_seconds=8)
+                if sample.size:
+                    recordings.append(sample)
+
+            for recording in recordings:
+                if self.speaker.learn(
+                    user_id,
+                    recording,
+                    self.config["audio"]["sample_rate"],
+                    quality_score(recording),
+                ):
+                    accepted += 1
+            self.state.event(
+                "voice_training",
+                "user=" + user_id + " accepted=" + str(accepted),
+            )
+
+        user = self.state.user(user_id)
+        if user is None or user["honorific"]:
+            return
+
+        for _ in range(3):
+            self.speak(
+                "Would you like me to address you as sir or ma'am?",
+                user_id,
+            )
+            answer_audio = self.capture(audio, max_seconds=6)
+            answer = self.stt.transcribe(
+                answer_audio,
+                self.config["assistant"]["language"],
+            )
+            honorific = self._honorific_from_text(answer)
+            if honorific is None:
+                self.speak("I didn't catch that. Please say sir or ma'am.", user_id)
+                continue
+
+            spoken = "Sir" if honorific == "sir" else "Ma'am"
+            self.speak(spoken + ", correct?", user_id)
+            confirm_audio = self.capture(audio, max_seconds=5)
+            confirm = self.stt.transcribe(
+                confirm_audio,
+                self.config["assistant"]["language"],
+            )
+            if self._yes(confirm):
+                self.state.upsert_user(
+                    user_id,
+                    str(user["name"]),
+                    honorific,
+                    str(user["role"]),
+                )
+                self.speak("Understood, " + spoken.lower() + ".", user_id)
+                return
+            self.speak("Understood. Let's try again.", user_id)
+
+    def _authenticate_unknown(
+        self,
+        audio,
+        command_audio: np.ndarray,
+    ) -> str | None:
+        granted = self._consume_tui_grant()
+        if granted:
+            self.sessions.create(granted, 1.0, "tui")
+            self._onboard_if_needed(audio, granted, [command_audio])
+            return granted
+
+        self.activity("Unknown speaker — waiting for identity")
+        self.speak("Who is this?")
+        name_audio = self.capture(audio, max_seconds=7)
+        name = self.stt.transcribe(
+            name_audio,
+            self.config["assistant"]["language"],
+        ).strip()
+
+        self.speak(
+            "Enter the password in the authentication section in the TUI "
+            "or say it out loud in 5, 4, 3, 2, 1."
+        )
+        password_audio = self.capture(audio, max_seconds=10)
+
+        granted = self._consume_tui_grant()
+        if granted:
+            self.sessions.create(granted, 1.0, "tui")
+            self._onboard_if_needed(audio, granted, [command_audio, name_audio])
+            return granted
+
+        spoken_password = self.stt.transcribe(
+            password_audio,
+            self.config["assistant"]["language"],
+        )
+        if not self.identity.verify_global_passphrase(spoken_password):
+            self.state.event("voice_auth_failed", "unknown speaker")
+            self.speak("Password incorrect.")
+            return None
+
+        user = self.state.user_by_name(name) if name else None
+        if user is None:
+            if not name:
+                self.speak("I couldn't get your name. Use the authentication section in the TUI.")
+                return None
+            user_id = self.identity.create_user(name)
+        else:
+            user_id = str(user["id"])
+
+        self.sessions.create(user_id, 1.0, "spoken-passphrase")
+        self._onboard_if_needed(audio, user_id, [command_audio, name_audio])
+        return user_id
+
+    def run(self) -> None:
+        self.state.event("runtime_start", "Jervis 7.1")
+
         with self.source() as audio:
+            self._audio = audio
             while self.running:
-                try:frame=audio.read()
-                except queue.Empty:self.stt.maybe_unload();continue
-                if not self.wake.process(frame):continue
-                self.state.event("wake","matched");self.speak(self.config["assistant"]["wake_acknowledgement"])
-                command_audio=self.capture(audio)
-                if command_audio.size<self.config["audio"]["sample_rate"]*0.25:continue
-                command=self.stt.transcribe(command_audio,self.config["assistant"]["language"])
-                if not command:self.speak("I didn't catch that.");continue
-                identity=self.identity.identify(command_audio,self.config["audio"]["sample_rate"])
+                self.activity("Idle — waiting for Jervis")
+                try:
+                    frame = audio.read(timeout=1.0)
+                except queue.Empty:
+                    self.stt.maybe_unload()
+                    continue
+
+                if not self.wake.process(frame):
+                    continue
+
+                self.state.event("wake", "matched")
+                self.activity("Wake detected — listening for command")
+                self.speak(self.config["assistant"]["wake_acknowledgement"])
+
+                command_audio = self.capture(audio)
+                if command_audio.size < self.config["audio"]["sample_rate"] * 0.25:
+                    continue
+
+                self.activity("Transcribing command")
+                command = self.stt.transcribe(
+                    command_audio,
+                    self.config["assistant"]["language"],
+                )
+                if not command:
+                    self.speak("I didn't catch that.")
+                    continue
+
+                identity = self.identity.identify(
+                    command_audio,
+                    self.config["audio"]["sample_rate"],
+                )
+
                 if identity.needs_retry:
-                    self.speak("One more time, boss?");retry=self.capture(audio);retry_text=self.stt.transcribe(retry,self.config["assistant"]["language"])
-                    again=self.identity.identify(retry,self.config["audio"]["sample_rate"])
-                    if again.authenticated and again.user_id:identity=again;command=retry_text or command
+                    self.speak("One more time, boss?")
+                    retry = self.capture(audio)
+                    retry_text = self.stt.transcribe(
+                        retry,
+                        self.config["assistant"]["language"],
+                    )
+                    again = self.identity.identify(
+                        retry,
+                        self.config["audio"]["sample_rate"],
+                    )
+                    if again.authenticated and again.user_id:
+                        identity = again
+                        command = retry_text or command
+                        command_audio = retry
+
+                logged_unknown = False
                 if not identity.authenticated or not identity.user_id:
-                    self.speak("I can't verify who's speaking. Authenticate in the Control Deck to continue.");self.state.event("identity_auth_required","voice confidence insufficient");continue
-                q=quality_score(command_audio)
-                if self.config["identity"]["continuous_learning"] and getattr(identity.match,"band",None) and identity.match.band.value=="strong" and q>=0.78:
-                    self.speaker.learn(identity.user_id,command_audio,self.config["audio"]["sample_rate"],q)
-                self.respond(command,identity.user_id);until=time.monotonic()+self.config["speech"]["follow_up_seconds"]
-                while self.running and time.monotonic()<until:
-                    try:follow=audio.read(timeout=0.5)
-                    except (queue.Empty,TypeError):continue
-                    if not self.vad.speech(follow):continue
-                    follow_audio=self.capture(audio,follow);follow_text=self.stt.transcribe(follow_audio,self.config["assistant"]["language"])
-                    if not follow_text:break
-                    self.sessions.refresh();self.respond(follow_text,identity.user_id);until=time.monotonic()+self.config["speech"]["follow_up_seconds"]
+                    self.state.dialogue("unknown", command)
+                    logged_unknown = True
+                    user_id = self._authenticate_unknown(audio, command_audio)
+                    if user_id is None:
+                        self.activity("Authentication required — unknown speaker")
+                        continue
+                    identity.user_id = user_id
+                    identity.authenticated = True
+
+                user_id = identity.user_id
+                if user_id is None:
+                    continue
+
+                quality = quality_score(command_audio)
+                if (
+                    self.config["identity"]["continuous_learning"]
+                    and getattr(identity.match, "band", None)
+                    and identity.match.band.value == "strong"
+                    and quality >= 0.78
+                ):
+                    self.speaker.learn(
+                        user_id,
+                        command_audio,
+                        self.config["audio"]["sample_rate"],
+                        quality,
+                    )
+
+                self.respond(command, user_id, log_user=not logged_unknown)
+                until = time.monotonic() + self.config["speech"]["follow_up_seconds"]
+
+                while self.running and time.monotonic() < until:
+                    self.activity("Follow-up window — listening")
+                    try:
+                        follow = audio.read(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                    if not self.vad.speech(follow):
+                        continue
+
+                    follow_audio = self.capture(audio, follow)
+                    follow_text = self.stt.transcribe(
+                        follow_audio,
+                        self.config["assistant"]["language"],
+                    )
+                    if not follow_text:
+                        break
+
+                    self.sessions.refresh()
+                    self.respond(follow_text, user_id)
+                    until = time.monotonic() + self.config["speech"]["follow_up_seconds"]

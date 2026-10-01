@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import shutil
 import sys
 from dataclasses import dataclass
 
 from .audio.devices import list_devices
 from .brain import OpenClawBrain
 from .models import Health
+from .openclaw_setup import find_openclaw
 from .paths import Paths
 from .platforms import current_platform
 
@@ -76,9 +76,13 @@ def run_doctor() -> DoctorReport:
     except Exception as exc:
         checks.append(Health(False, "service", str(exc)))
 
-    openclaw = shutil.which("openclaw")
+    openclaw = find_openclaw()
     checks.append(
-        Health(openclaw is not None, "openclaw", openclaw or "missing")
+        Health(
+            openclaw is not None,
+            "openclaw",
+            str(openclaw) if openclaw else "missing",
+        )
     )
     ok, detail = OpenClawBrain().doctor()
     checks.append(Health(ok, "openclaw_doctor", detail))

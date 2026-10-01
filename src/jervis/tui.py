@@ -1,30 +1,263 @@
-import curses,time
+from __future__ import annotations
+
+import curses
+import secrets
+import time
+
+from .config import load, save
 from .paths import Paths
+from .security import verify_passphrase
 from .state import State
 from .version import __version__
-TABS=["DASH","DIALOGUE","PEOPLE","AUDIO","BRAIN","SKILLS","AGENTS","MEMORY","PERMISSIONS","TIMELINE","LOGS","SETTINGS","AUTH"]
-def safe(screen,y,x,text,attr=0):
-    h,w=screen.getmaxyx()
-    if 0<=y<h and 0<=x<w:
-        try:screen.addnstr(y,x,text,max(0,w-x-1),attr)
-        except curses.error:pass
-def run():
-    paths=Paths.resolve();paths.ensure();state=State(paths.data/"jervis.sqlite3")
-    def app(screen):
-        curses.curs_set(0);screen.nodelay(True);tab=0
+
+TABS = [
+    "DASH",
+    "DIALOGUE",
+    "PEOPLE",
+    "AUDIO",
+    "BRAIN",
+    "SKILLS",
+    "AGENTS",
+    "MEMORY",
+    "PERMISSIONS",
+    "TIMELINE",
+    "LOGS",
+    "SETTINGS",
+    "AUTH",
+]
+
+
+def safe(screen, y: int, x: int, text: str, attr: int = 0) -> None:
+    height, width = screen.getmaxyx()
+    if 0 <= y < height and 0 <= x < width:
+        try:
+            screen.addnstr(y, x, text, max(0, width - x - 1), attr)
+        except curses.error:
+            pass
+
+
+def prompt(screen, label: str, secret: bool = False) -> str:
+    height, width = screen.getmaxyx()
+    y = max(0, height - 2)
+    screen.nodelay(False)
+    curses.curs_set(1)
+    if secret:
+        curses.noecho()
+    else:
+        curses.echo()
+    try:
+        safe(screen, y, 2, " " * max(0, width - 4))
+        safe(screen, y, 2, label)
+        screen.refresh()
+        raw = screen.getstr(y, min(width - 2, 2 + len(label)), max(1, width - len(label) - 5))
+        return raw.decode("utf-8", "replace").strip()
+    finally:
+        curses.noecho()
+        curses.curs_set(0)
+        screen.nodelay(True)
+
+
+def auth_action(screen, state: State) -> str:
+    users = state.users()
+    choices = [str(index + 1) + ". " + str(user["name"]) for index, user in enumerate(users)]
+    choices.append("N. New person")
+
+    screen.erase()
+    safe(screen, 0, 2, "JERVIS AUTHENTICATION", curses.A_BOLD)
+    for index, choice in enumerate(choices[:20]):
+        safe(screen, 2 + index, 2, choice)
+    screen.refresh()
+
+    selected = prompt(screen, "Select identity: ")
+    new_person = selected.lower() == "n"
+    user = None
+    if not new_person:
+        if not selected.isdigit() or not 1 <= int(selected) <= len(users):
+            return "Invalid identity selection."
+        user = users[int(selected) - 1]
+
+    encoded = state.get_kv("auth.passphrase_hash")
+    if not isinstance(encoded, str):
+        return "No authentication passphrase is configured."
+
+    password = prompt(screen, "Password: ", secret=True)
+    if not verify_passphrase(password, encoded):
+        state.event("tui_auth_failed", "invalid passphrase")
+        return "Authentication failed."
+
+    if new_person:
+        name = prompt(screen, "Name: ")
+        if not name:
+            return "Name cannot be empty."
+        existing = state.user_by_name(name)
+        if existing is not None:
+            user = existing
+        else:
+            user_id = secrets.token_hex(8)
+            state.upsert_user(user_id, name, None, "known")
+            user = state.user(user_id)
+
+    if user is None:
+        return "Authentication failed."
+
+    state.set_kv(
+        "auth.tui_grant",
+        {
+            "user_id": str(user["id"]),
+            "issued_at": time.time(),
+        },
+    )
+    state.event("tui_auth_granted", "user=" + str(user["id"]))
+    return "Authenticated as " + str(user["name"]) + "."
+
+
+def run() -> None:
+    paths = Paths.resolve()
+    paths.ensure()
+    state = State(paths.data / "jervis.sqlite3")
+    config_path = paths.config / "config.json"
+
+    def app(screen) -> None:
+        curses.curs_set(0)
+        screen.nodelay(True)
+        tab = 0
+        notice = ""
+
         while True:
-            screen.erase();safe(screen,0,2,"JERVIS CONTROL DECK  v"+__version__,curses.A_BOLD);safe(screen,1,2,"  ".join(("["+name+"]" if i==tab else name) for i,name in enumerate(TABS)))
-            safe(screen,3,2,"ACTIVE: "+str(state.get_kv("activity","Idle — waiting for Jervis")));name=TABS[tab]
-            if name=="PEOPLE":
-                for i,user in enumerate(state.users()[:20]):safe(screen,5+i,2,str(user["name"])+"  role="+str(user["role"])+"  address="+str(user["honorific"] or "not set"))
-            elif name=="TIMELINE":
-                rows=state._db.execute("SELECT ts,kind,detail FROM events ORDER BY id DESC LIMIT 20").fetchall()
-                for i,row in enumerate(rows):safe(screen,5+i,2,time.strftime("%H:%M:%S",time.localtime(row["ts"]))+" "+row["kind"]+": "+row["detail"])
-            else:safe(screen,5,2,name+" panel connected to local Jervis state.  arrows navigate · q quit")
-            screen.refresh();key=screen.getch()
-            if key in (ord("q"),27):break
-            if key==curses.KEY_RIGHT:tab=(tab+1)%len(TABS)
-            elif key==curses.KEY_LEFT:tab=(tab-1)%len(TABS)
+            screen.erase()
+            safe(screen, 0, 2, "JERVIS CONTROL DECK  v" + __version__, curses.A_BOLD)
+            safe(
+                screen,
+                1,
+                2,
+                "  ".join(
+                    ("[" + name + "]" if index == tab else name)
+                    for index, name in enumerate(TABS)
+                ),
+            )
+            active = str(state.get_kv("activity", "Idle — waiting for Jervis"))
+            safe(screen, 3, 2, "ACTIVE: " + active)
+            name = TABS[tab]
+
+            if name == "DASH":
+                safe(screen, 5, 2, "←/→ navigate · q quit")
+                safe(screen, 6, 2, "AUTH: press A from the AUTH tab")
+                safe(screen, 7, 2, "AUDIO: +/- changes Jervis speech volume")
+            elif name == "DIALOGUE":
+                rows = state.recent_dialogue(20)
+                for index, row in enumerate(rows):
+                    stamp = time.strftime("%H:%M:%S", time.localtime(row["ts"]))
+                    role = str(row["role"])
+                    if role.lower() == "jervis":
+                        label = "Jervis:"
+                    elif role.lower() == "unknown":
+                        label = "Unknown:"
+                    else:
+                        label = "[" + role + "]:"
+                    safe(
+                        screen,
+                        5 + index,
+                        2,
+                        stamp + "  " + label + " " + str(row["text"]),
+                    )
+            elif name == "PEOPLE":
+                for index, user in enumerate(state.users()[:20]):
+                    safe(
+                        screen,
+                        5 + index,
+                        2,
+                        str(user["name"])
+                        + "  role="
+                        + str(user["role"])
+                        + "  address="
+                        + str(user["honorific"] or "not set"),
+                    )
+            elif name == "AUDIO":
+                try:
+                    config = load(config_path)
+                    volume = float(
+                        state.get_kv(
+                            "audio.jervis_volume",
+                            config["audio"]["jervis_volume"],
+                        )
+                    )
+                    source = config["audio"]["source"]
+                    safe(screen, 5, 2, "Jervis volume: " + str(round(volume * 100)) + "%")
+                    safe(screen, 6, 2, "Use + / - to adjust from 5% to 200%.")
+                    safe(screen, 8, 2, "Input: " + str(source))
+                    safe(
+                        screen,
+                        9,
+                        2,
+                        "Output device: " + str(config["audio"]["output_device"]),
+                    )
+                except Exception as exc:
+                    safe(screen, 5, 2, "Audio config error: " + str(exc))
+            elif name == "TIMELINE":
+                rows = state.recent_events(20)
+                for index, row in enumerate(rows):
+                    stamp = time.strftime("%H:%M:%S", time.localtime(row["ts"]))
+                    safe(
+                        screen,
+                        5 + index,
+                        2,
+                        stamp + "  " + str(row["kind"]) + ": " + str(row["detail"]),
+                    )
+            elif name == "AUTH":
+                safe(screen, 5, 2, "Press A to authenticate.")
+                safe(
+                    screen,
+                    6,
+                    2,
+                    "Select your identity, then enter the Jervis passphrase.",
+                )
+                safe(
+                    screen,
+                    7,
+                    2,
+                    "The password is verified locally and is never added to dialogue.",
+                )
+            else:
+                safe(screen, 5, 2, name + " panel connected to local Jervis state.")
+
+            if notice:
+                height, _ = screen.getmaxyx()
+                safe(screen, max(0, height - 4), 2, notice, curses.A_BOLD)
+
+            screen.refresh()
+            key = screen.getch()
+            if key in (ord("q"), 27):
+                break
+            if key == curses.KEY_RIGHT:
+                tab = (tab + 1) % len(TABS)
+                notice = ""
+            elif key == curses.KEY_LEFT:
+                tab = (tab - 1) % len(TABS)
+                notice = ""
+            elif name == "AUTH" and key in (ord("a"), ord("A")):
+                notice = auth_action(screen, state)
+            elif name == "AUDIO" and key in (ord("+"), ord("="), ord("-"), ord("_")):
+                try:
+                    config = load(config_path)
+                    current = float(
+                        state.get_kv(
+                            "audio.jervis_volume",
+                            config["audio"]["jervis_volume"],
+                        )
+                    )
+                    delta = 0.1 if key in (ord("+"), ord("=")) else -0.1
+                    volume = max(0.05, min(2.0, round(current + delta, 2)))
+                    config["audio"]["jervis_volume"] = volume
+                    save(config_path, config)
+                    state.set_kv("audio.jervis_volume", volume)
+                    state.event("jervis_volume_changed", str(volume))
+                    notice = "Jervis volume " + str(round(volume * 100)) + "%"
+                except Exception as exc:
+                    notice = "Volume change failed: " + str(exc)
+
             time.sleep(0.05)
-    try:curses.wrapper(app)
-    finally:state.close()
+
+    try:
+        curses.wrapper(app)
+    finally:
+        state.close()
