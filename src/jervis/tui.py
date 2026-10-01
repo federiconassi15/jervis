@@ -200,6 +200,22 @@ def run() -> None:
                         2,
                         "Output device: " + str(config["audio"]["output_device"]),
                     )
+                    quality = state.get_kv("audio.last_quality")
+                    if isinstance(quality, dict):
+                        safe(
+                            screen,
+                            11,
+                            2,
+                            "Last input: "
+                            + str(quality.get("label", "unknown"))
+                            + " · score="
+                            + format(float(quality.get("score", 0.0)), ".2f")
+                            + " · rms="
+                            + format(float(quality.get("rms", 0.0)), ".4f")
+                            + " · clipping="
+                            + format(float(quality.get("clipping", 0.0)) * 100.0, ".2f")
+                            + "%",
+                        )
                 except Exception as exc:
                     safe(screen, 5, 2, "Audio config error: " + str(exc))
             elif name == "BRAIN":
