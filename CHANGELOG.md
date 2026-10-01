@@ -10,6 +10,7 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 - Optional Rust/PyO3 acceleration for audio analysis and VAD, with NumPy fallback.
 - OpenClaw Gateway HTTP fast transport with CLI fallback.
+- Bounded memory context with redundant recent-dialogue prompt replay disabled by default.
 - Background STT, speaker, wake, and common-TTS prewarming.
 - Batched brain context snapshots and transport telemetry.
 - 7.3 fast-path regression tests.

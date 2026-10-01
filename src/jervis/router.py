@@ -137,13 +137,17 @@ class BrainRouter:
 
         memories = snapshot.get("memories") or []
         if memories:
-            parts.append(
-                "Explicit local memories:\n"
-                + "\n".join("- " + str(item["value"]) for item in reversed(memories))
+            limit = max(
+                200,
+                int(self.config.get("brain", {}).get("memory_context_chars", 1600)),
             )
+            memory_text = "\n".join(
+                "- " + str(item["value"]) for item in reversed(memories)
+            )
+            parts.append("Explicit local memories:\n" + memory_text[:limit])
 
         dialogue = snapshot.get("dialogue") or []
-        if dialogue:
+        if dialogue and self.config.get("brain", {}).get("inject_recent_dialogue", False):
             parts.append(
                 "Recent local conversation context:\n"
                 + "\n".join(
@@ -181,7 +185,12 @@ class BrainRouter:
 
         tier, thinking = self._tier(text)
         route_name = "openclaw:" + tier
-        snapshot = self.state.context_snapshot(user_id)
+        brain_config = self.config.get("brain", {})
+        snapshot = self.state.context_snapshot(
+            user_id,
+            memory_limit=int(brain_config.get("memory_context_items", 6)),
+            dialogue_limit=8 if brain_config.get("inject_recent_dialogue", False) else 0,
+        )
         self.brain.agent = str(snapshot.get("agent") or self.default_agent)
         self.state.event("brain_route", route_name)
         reply = self.brain.ask(

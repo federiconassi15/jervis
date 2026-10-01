@@ -66,6 +66,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "gateway_http": True,
         "gateway_url": "http://127.0.0.1:18789",
         "gateway_retry_seconds": 60,
+        "inject_recent_dialogue": False,
+        "memory_context_items": 6,
+        "memory_context_chars": 1600,
     },
     "privacy": {
         "persist_dialogue": True,

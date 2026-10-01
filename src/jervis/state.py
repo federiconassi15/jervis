@@ -214,19 +214,27 @@ class State:
                 "SELECT * FROM users WHERE id=?",
                 (user_id,),
             ).fetchone()
-            memories = list(
-                self._db.execute(
-                    "SELECT key,value,created_at,updated_at FROM memories "
-                    "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
-                    (user_id, max(1, int(memory_limit))),
+            memories = (
+                list(
+                    self._db.execute(
+                        "SELECT key,value,created_at,updated_at FROM memories "
+                        "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
+                        (user_id, int(memory_limit)),
+                    )
                 )
+                if int(memory_limit) > 0
+                else []
             )
-            dialogue = list(
-                self._db.execute(
-                    "SELECT ts,user_id,role,text FROM dialogue "
-                    "WHERE user_id=? ORDER BY id DESC LIMIT ?",
-                    (user_id, max(1, int(dialogue_limit))),
+            dialogue = (
+                list(
+                    self._db.execute(
+                        "SELECT ts,user_id,role,text FROM dialogue "
+                        "WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                        (user_id, int(dialogue_limit)),
+                    )
                 )
+                if int(dialogue_limit) > 0
+                else []
             )
             agent = self._db.execute(
                 "SELECT value FROM kv WHERE key=?",
