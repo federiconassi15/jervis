@@ -18,8 +18,8 @@ class WindowsPlatform(PlatformAdapter):
     def capabilities(self) -> PlatformCapabilities:
         return PlatformCapabilities(
             name="windows",
-            desktop_startup="Task Scheduler at logon",
-            server_startup="Task Scheduler at startup as SYSTEM",
+            desktop_startup="Task Scheduler at user logon",
+            server_startup="persistent Task Scheduler task in the interactive audio session",
             audio_backend="WASAPI / DirectSound / MME through PortAudio",
         )
 
@@ -69,22 +69,14 @@ class WindowsPlatform(PlatformAdapter):
             "$argument='/d /s /c \"' + $wrapper + '\"';"
             "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $argument;"
         )
-        if mode == "server":
-            trigger = "$t=New-ScheduledTaskTrigger -AtStartup;"
-            principal = (
-                "$p=New-ScheduledTaskPrincipal -UserId 'SYSTEM' "
-                "-LogonType ServiceAccount -RunLevel Highest;"
-            )
-        else:
-            trigger = "$t=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
-            principal = (
-                "$p=New-ScheduledTaskPrincipal -UserId $env:USERNAME "
-                "-LogonType Interactive -RunLevel Limited;"
-            )
-
+        trigger = "$t=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
+        principal = (
+            "$p=New-ScheduledTaskPrincipal -UserId $env:USERNAME "
+            "-LogonType Interactive -RunLevel Limited;"
+        )
         settings = (
             "$s=New-ScheduledTaskSettingsSet "
-            "-RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) "
+            "-RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) "
             "-ExecutionTimeLimit ([TimeSpan]::Zero) "
             "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries;"
         )
@@ -93,7 +85,10 @@ class WindowsPlatform(PlatformAdapter):
             + _ps_quote(self.task_name)
             + " -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null;"
         )
-        self._powershell(action + trigger + principal + settings + register, check=True)
+        self._powershell(
+            action + trigger + principal + settings + register,
+            check=True,
+        )
         self.start_service()
 
     def remove_service(self) -> None:

@@ -21,7 +21,10 @@ def find_openclaw() -> Path | None:
     candidates: list[Path] = []
     if platform.system() == "Windows":
         appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
-        candidates += [appdata / "npm" / "openclaw.cmd", appdata / "npm" / "openclaw.exe"]
+        candidates += [
+            appdata / "npm" / "openclaw.cmd",
+            appdata / "npm" / "openclaw.exe",
+        ]
     else:
         candidates += [
             home / ".npm-global" / "bin" / "openclaw",
@@ -54,8 +57,17 @@ def find_openclaw() -> Path | None:
     return next((path for path in candidates if path.exists()), None)
 
 
-def run(cli: Path, *args: str, interactive: bool = True) -> subprocess.CompletedProcess[str]:
-    kwargs = {"check": False, "text": True}
+def run(
+    cli: Path,
+    *args: str,
+    interactive: bool = True,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    kwargs = {
+        "check": False,
+        "text": True,
+        "timeout": timeout,
+    }
     if not interactive:
         kwargs["capture_output"] = True
 
@@ -72,18 +84,27 @@ def install_official(progress: Progress) -> Path:
 
     if system == "Windows":
         payload = urllib.request.urlopen(
-            "https://openclaw.ai/install.ps1", timeout=30
+            "https://openclaw.ai/install.ps1",
+            timeout=30,
         ).read().decode("utf-8")
         with tempfile.NamedTemporaryFile(
-            "w", suffix=".ps1", delete=False, encoding="utf-8"
+            "w",
+            suffix=".ps1",
+            delete=False,
+            encoding="utf-8",
         ) as handle:
             handle.write(payload)
             script = Path(handle.name)
         try:
             proc = subprocess.run(
                 [
-                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", str(script), "-NoOnboard",
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-NoOnboard",
                 ],
                 text=True,
                 capture_output=True,
@@ -93,14 +114,25 @@ def install_official(progress: Progress) -> Path:
             script.unlink(missing_ok=True)
     else:
         payload = urllib.request.urlopen(
-            "https://openclaw.ai/install.sh", timeout=30
+            "https://openclaw.ai/install.sh",
+            timeout=30,
         ).read()
-        with tempfile.NamedTemporaryFile("wb", suffix=".sh", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            suffix=".sh",
+            delete=False,
+        ) as handle:
             handle.write(payload)
             script = Path(handle.name)
         try:
             proc = subprocess.run(
-                ["bash", str(script), "--no-prompt", "--no-onboard", "--verify"],
+                [
+                    "bash",
+                    str(script),
+                    "--no-prompt",
+                    "--no-onboard",
+                    "--verify",
+                ],
                 text=True,
                 capture_output=True,
                 check=False,
@@ -121,12 +153,24 @@ def install_official(progress: Progress) -> Path:
 
 
 def doctor(cli: Path) -> tuple[bool, str]:
-    proc = run(cli, "doctor", interactive=False)
+    try:
+        proc = run(
+            cli,
+            "doctor",
+            interactive=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "OpenClaw doctor timed out"
     detail = ((proc.stdout or "") + (proc.stderr or "")).strip()
     return proc.returncode == 0, detail[-3000:]
 
 
-def configure(cli: Path, mode: str, choose: Callable[[str, list[str], int], int]) -> None:
+def configure(
+    cli: Path,
+    mode: str,
+    choose: Callable[[str, list[str], int], int],
+) -> None:
     choice = choose(
         "OpenClaw model access",
         [
@@ -144,8 +188,14 @@ def configure(cli: Path, mode: str, choose: Callable[[str, list[str], int], int]
         method = "device-code" if mode == "server" else "oauth"
         proc = run(
             cli,
-            "models", "auth", "login", "--provider", "openai",
-            "--method", method, "--set-default",
+            "models",
+            "auth",
+            "login",
+            "--provider",
+            "openai",
+            "--method",
+            method,
+            "--set-default",
             interactive=True,
         )
         if proc.returncode != 0:
@@ -158,15 +208,28 @@ def configure(cli: Path, mode: str, choose: Callable[[str, list[str], int], int]
     if choice == 1:
         proc = run(
             cli,
-            "models", "auth", "login", "--provider", "openai",
-            "--method", "api-key", "--set-default",
+            "models",
+            "auth",
+            "login",
+            "--provider",
+            "openai",
+            "--method",
+            "api-key",
+            "--set-default",
             interactive=True,
         )
         if proc.returncode != 0:
             raise RuntimeError("OpenAI API-key authentication did not complete")
-        run(cli, "gateway", "install", interactive=True)
+        gateway = run(cli, "gateway", "install", interactive=True)
+        if gateway.returncode != 0:
+            raise RuntimeError("OpenClaw gateway service installation failed")
         return
 
-    proc = run(cli, "onboard", "--install-daemon", interactive=True)
+    proc = run(
+        cli,
+        "onboard",
+        "--install-daemon",
+        interactive=True,
+    )
     if proc.returncode != 0:
         raise RuntimeError("OpenClaw onboarding did not complete")
