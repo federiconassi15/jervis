@@ -12,6 +12,10 @@ def _ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _cmd_argument(wrapper: Path) -> str:
+    return '/d /c ""' + str(wrapper) + '""'
+
+
 class WindowsPlatform(PlatformAdapter):
     task_name = "Jervis Voice Assistant"
 
@@ -65,9 +69,9 @@ class WindowsPlatform(PlatformAdapter):
         wrapper.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
 
         action = (
-            "$wrapper=" + _ps_quote(str(wrapper)) + ";"
-            "$argument='/d /s /c ""' + $wrapper + '""';"
-            "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $argument;"
+            "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "
+            + _ps_quote(_cmd_argument(wrapper))
+            + ";"
         )
         trigger = "$t=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
         principal = (

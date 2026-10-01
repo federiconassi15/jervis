@@ -3,7 +3,7 @@ import platform
 from jervis.platforms.factory import current_platform
 from jervis.platforms.linux import LinuxPlatform, _unit_quote
 from jervis.platforms.macos import MacOSPlatform
-from jervis.platforms.windows import WindowsPlatform, _ps_quote
+from jervis.platforms.windows import WindowsPlatform, _cmd_argument, _ps_quote
 
 
 def test_current_platform_matches_runner():
@@ -28,12 +28,9 @@ def test_platform_quoting_helpers():
     assert _ps_quote("a'b") == "'a''b'"
 
 
-def test_windows_task_argument_uses_cmd_double_quotes():
+
+def test_windows_task_argument_quotes_paths_with_spaces():
     wrapper = r"C:\\Program Files\\Jervis\\jervis-service.cmd"
-    script = (
-        "$wrapper=" + _ps_quote(wrapper) + ";"
-        "$argument='/d /s /c ""' + $wrapper + '""';"
-    )
-    assert "\\\"" not in script
-    assert "/d /s /c" in script
-    assert "jervis-service.cmd" in script
+    argument = _cmd_argument(wrapper)
+    assert argument == '/d /c ""C:\\Program Files\\Jervis\\jervis-service.cmd""'
+    assert "\\\"" not in argument
