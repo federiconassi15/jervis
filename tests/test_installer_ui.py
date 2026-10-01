@@ -81,3 +81,19 @@ def test_linux_prerequisites_run_before_tui(monkeypatch):
 
     assert install() == 0
     assert order == ["prerequisites", "tui"]
+
+
+def test_installer_arrow_navigation():
+    async def scenario():
+        app = JervisInstaller()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            assert app.step == 0
+            await pilot.press("right")
+            await pilot.pause()
+            assert app.step == 1
+            await pilot.press("left")
+            await pilot.pause()
+            assert app.step == 0
+
+    asyncio.run(scenario())
