@@ -32,7 +32,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
 
       - name: Compile every Python file
-        run: python -m compileall -q src tests scripts bootstrap.py install.py
+        run: python -m compileall -q src tests scripts
 
       - name: Repository verifier
         run: python scripts/verify_repo.py
@@ -44,10 +44,10 @@ jobs:
         run: python -m pytest
 
       - name: Ruff
-        run: ruff check --select E9,F63,F7,F82 src tests scripts bootstrap.py install.py
+        run: ruff check --select E9,F63,F7,F82 src tests scripts
 
   release-artifact:
-    name: Universal release artifact
+    name: Source + bootstrap artifacts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,14 +62,11 @@ jobs:
       - name: Build wheel and source distribution
         run: python -m build
 
-      - name: Build universal installer
-        run: python scripts/build_release.py
-
-      - name: Verify universal installer
-        run: python scripts/verify_release.py
-
-      - name: Verify bootstrap syntax
-        run: python -m py_compile bootstrap.py install.py
+      - name: Verify native bootstrap scripts
+        shell: bash
+        run: |
+          sh -n install.sh
+          pwsh -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw install.ps1))"
 
   native-smoke:
     name: Native binary / ${{ matrix.name }}
