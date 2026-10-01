@@ -122,8 +122,12 @@ class BrainRouter:
             brain.get("default_thinking", brain.get("thinking", "low"))
         )
 
-    def _context_prompt(self, text: str, user_id: str) -> str:
-        user = self.state.user(user_id)
+    def _context_prompt(
+        self,
+        text: str,
+        snapshot: dict[str, Any],
+    ) -> str:
+        user = snapshot.get("user")
         parts = ["You are Jervis, a concise voice assistant."]
         if user is not None:
             parts.append("Current user: " + str(user["name"]) + ".")
@@ -131,14 +135,14 @@ class BrainRouter:
                 label = "ma'am" if str(user["honorific"]) == "maam" else "sir"
                 parts.append("Preferred form of address: " + label + ".")
 
-        memories = self.state.memories(user_id, 12)
+        memories = snapshot.get("memories") or []
         if memories:
             parts.append(
                 "Explicit local memories:\n"
                 + "\n".join("- " + str(item["value"]) for item in reversed(memories))
             )
 
-        dialogue = self.state.recent_user_dialogue(user_id, 8)
+        dialogue = snapshot.get("dialogue") or []
         if dialogue:
             parts.append(
                 "Recent local conversation context:\n"
@@ -177,11 +181,13 @@ class BrainRouter:
 
         tier, thinking = self._tier(text)
         route_name = "openclaw:" + tier
+        snapshot = self.state.context_snapshot(user_id)
+        self.brain.agent = str(snapshot.get("agent") or self.default_agent)
         self.state.event("brain_route", route_name)
-        self.brain.agent = self.agents.selected(user_id, self.default_agent)
         reply = self.brain.ask(
-            self._context_prompt(text, user_id),
+            self._context_prompt(text, snapshot),
             "jervis:" + user_id,
             thinking=thinking,
         )
+        self.state.event("brain_transport", self.brain.last_transport)
         return RouteReply(reply.ok, reply.text, route_name, reply.error)

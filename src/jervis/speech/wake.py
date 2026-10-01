@@ -23,6 +23,12 @@ class WakeDetector:
         self.decoder.start_utt()
         return self.decoder
 
+    def prewarm(self) -> None:
+        try:
+            self._load()
+        except Exception:
+            pass
+
     def process(self, frame) -> bool:
         decoder = self._load()
         pcm = (np.clip(frame, -1, 1) * 32767).astype("<i2").tobytes()

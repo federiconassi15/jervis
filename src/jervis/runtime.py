@@ -65,6 +65,8 @@ class Runtime:
             speech["stt_model"],
             speech["stt_device"],
             speech["compute_type"],
+            speech.get("stt_keep_warm_seconds", 900),
+            speech.get("stt_beam_size", 1),
         )
         self.tts = TTS(
             speech["tts_backend"],
@@ -81,6 +83,9 @@ class Runtime:
             brain["agent"],
             brain["timeout_seconds"],
             brain["thinking"],
+            gateway_http=brain.get("gateway_http", True),
+            gateway_url=brain.get("gateway_url", "http://127.0.0.1:18789"),
+            gateway_retry_seconds=brain.get("gateway_retry_seconds", 60),
         )
         self.router = BrainRouter(self.state, self.paths, self.brain, self.config)
         self.presence = PresenceManager(
@@ -95,10 +100,49 @@ class Runtime:
         self.running = True
         self._audio = None
         self._pending_barge: np.ndarray | None = None
+        self._last_activity: str | None = None
+        self._volume_value = float(audio.get("jervis_volume", 1.0))
+        self._volume_checked_at = 0.0
         self.activity("Idle — waiting for Jervis")
+        self._prewarm()
+
+    def _prewarm(self) -> None:
+        if self.config["speech"].get("stt_prewarm", True):
+            self.stt.prewarm()
+        self.speaker.prewarm()
+        threading.Thread(
+            target=self.wake.prewarm,
+            name="jervis-wake-prewarm",
+            daemon=True,
+        ).start()
+        self.tts.prewarm(
+            [
+                self.config["assistant"]["wake_acknowledgement"],
+                "I didn't catch that.",
+                "One more time, boss?",
+                "Who is this?",
+                "Password incorrect.",
+                "Understood.",
+            ]
+        )
 
     def activity(self, text: str) -> None:
+        if text == self._last_activity:
+            return
+        self._last_activity = text
         self.state.set_kv("activity", text)
+
+    def _volume(self) -> float:
+        now = time.monotonic()
+        if now - self._volume_checked_at >= 1.0:
+            self._volume_value = float(
+                self.state.get_kv(
+                    "audio.jervis_volume",
+                    self.config["audio"].get("jervis_volume", 1.0),
+                )
+            )
+            self._volume_checked_at = now
+        return self._volume_value
 
     def source(self):
         audio = self.config["audio"]
@@ -149,13 +193,7 @@ class Runtime:
         *,
         allow_barge: bool = False,
     ) -> None:
-        volume = float(
-            self.state.get_kv(
-                "audio.jervis_volume",
-                self.config["audio"].get("jervis_volume", 1.0),
-            )
-        )
-        self.tts.set_volume(volume)
+        self.tts.set_volume(self._volume())
         self.state.dialogue("jervis", text, user_id)
         self.activity("Speaking — " + text[:80])
 
@@ -184,6 +222,7 @@ class Runtime:
 
         started = time.monotonic()
         baseline: list[float] = []
+        leak_floor: float | None = None
         pre: collections.deque[np.ndarray] = collections.deque(maxlen=8)
         hot = 0
         trigger_frame: np.ndarray | None = None
@@ -201,13 +240,13 @@ class Runtime:
                 baseline.append(level)
                 continue
 
-            sorted_baseline = sorted(baseline)
-            leak = (
-                sorted_baseline[len(sorted_baseline) // 2]
-                if sorted_baseline
-                else self.vad.noise
-            )
-            trigger = max(0.025, leak * 2.2, self.vad.noise * 4.0)
+            if leak_floor is None:
+                if baseline:
+                    ordered = sorted(baseline)
+                    leak_floor = ordered[len(ordered) // 2]
+                else:
+                    leak_floor = self.vad.noise
+            trigger = max(0.025, leak_floor * 2.2, self.vad.noise * 4.0)
             hot = hot + 1 if level >= trigger else max(0, hot - 1)
             if hot >= 4:
                 trigger_frame = frame
@@ -419,7 +458,7 @@ class Runtime:
         return user_id
 
     def run(self) -> None:
-        self.state.event("runtime_start", "Jervis 7.1")
+        self.state.event("runtime_start", "Jervis 7.3")
 
         with self.source() as audio:
             self._audio = audio
