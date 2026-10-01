@@ -13,6 +13,7 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 - Background STT, speaker, wake, and common-TTS prewarming.
 - Batched brain context snapshots and transport telemetry.
 - 7.3 fast-path regression tests.
+- `jervis runtime-info` to expose the active acceleration backend.
 
 ### Changed
 

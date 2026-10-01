@@ -28,6 +28,7 @@ from .install_engine import TOTAL_STEPS, run_install
 from .install_plan import InstallOutcome, InstallPlan
 from .openclaw_setup import configure_mode, find_openclaw
 from .prereqs import ensure_linux_audio, find_adb
+from .version import __version__
 
 BANTER = [
     "Local. Fast. Yours.",
@@ -41,7 +42,7 @@ BANTER = [
 
 class JervisInstaller(App[int]):
     TITLE = "Jervis Installer"
-    SUB_TITLE = "7.1"
+    SUB_TITLE = __version__
 
     CSS = """
     Screen {
@@ -327,7 +328,7 @@ class JervisInstaller(App[int]):
 
     def compose(self) -> ComposeResult:
         with Container(id="frame"):
-            yield Static("JERVIS 7.1  ·  SETUP", id="topline")
+            yield Static("JERVIS " + __version__ + "  ·  SETUP", id="topline")
             with Horizontal():
                 yield Static("◐", id="pulse")
                 yield Static(

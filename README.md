@@ -2,7 +2,7 @@
 
 > A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis 7.1 is a local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain.
+Jervis 7.3 is a low-latency local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
 ## Install
 
@@ -88,7 +88,7 @@ OpenClaw setup is integrated into the Jervis installer. Existing installations a
       ↓
     response + follow-up conversation
 
-Jervis 7.1 identifies from the longer natural command rather than trying to authenticate a person from the wake word alone.
+Jervis identifies from the longer natural command rather than trying to authenticate a person from the wake word alone. In 7.3 the runtime prewarms speech/identity models, uses faster command endpointing, batches state work, and can talk to the local OpenClaw Gateway directly when its authenticated HTTP surface is available.
 
 ## Commands
 
@@ -99,6 +99,22 @@ Jervis 7.1 identifies from the longer natural command rather than trying to auth
     jervis repair audio
     jervis repair openclaw
     jervis update-check
+    jervis runtime-info
+
+## 7.3 runtime
+
+The 7.3 runtime is optimized around lower voice-turn latency:
+
+- optional Rust/PyO3 audio analysis and adaptive VAD,
+- 450 ms configurable end-of-command silence endpointing,
+- background Whisper, speaker, wake, and common-TTS prewarming,
+- cached/vectorized speaker matching,
+- lighter desktop audio buffering and cached Android resampling,
+- SQLite WAL/NORMAL state with batched retention housekeeping,
+- OpenClaw Gateway HTTP fast path with safe CLI fallback,
+- `jervis runtime-info` to show the active acceleration backend.
+
+See [7.3.0 release notes](docs/releases/7.3.0.md) for the code-derived change list.
 
 ## Wiki
 
