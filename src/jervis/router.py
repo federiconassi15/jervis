@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,11 @@ class RouteReply:
 class BrainRouter:
     """Routes cheap/local work before handing the request to OpenClaw."""
 
-    def __init__(self, state, paths, brain: OpenClawBrain) -> None:
+    def __init__(self, state, paths, brain: OpenClawBrain, config: dict | None = None) -> None:
         self.state = state
         self.paths = paths
         self.brain = brain
+        self.config = config or {}
         self.default_agent = brain.agent
         self.agents = AgentHub(state)
         self.skills = SkillManager(
@@ -65,17 +67,78 @@ class BrainRouter:
                 return "I'll use the " + requested + " agent for you."
             return "I couldn't find an OpenClaw agent named " + requested + "."
 
+        if query.startswith("remember that "):
+            fact = text.strip()[14:].strip()
+            if not fact:
+                return "Tell me what you want me to remember."
+            key = "fact-" + hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
+            self.state.remember(user_id, key, fact)
+            self.state.event("memory_saved", "user=" + user_id + " key=" + key)
+            return "Remembered."
+
+        if query in {"clear my memory", "forget everything about me"}:
+            self.state.clear_memories(user_id)
+            self.state.event("memory_cleared", "user=" + user_id)
+            return "Your explicit Jervis memory is cleared."
+
         if query in {"what do you remember about me", "what do you remember"}:
             memories = self.state.memories(user_id, 8)
             if not memories:
                 return "I don't have any explicit memories saved for you yet."
-            summary = "; ".join(
-                item["key"] + "=" + str(item["value"])
-                for item in memories
-            )
-            return "I remember: " + summary + "."
+            return "I remember: " + "; ".join(str(item["value"]) for item in memories) + "."
 
         return None
+
+    def _tier(self, text: str) -> tuple[str, str]:
+        brain = self.config.get("brain", {})
+        lowered = text.lower()
+        deep_markers = (
+            "analyze",
+            "analyse",
+            "research",
+            "compare",
+            "debug",
+            "design",
+            "architecture",
+            "step by step",
+            "reason",
+        )
+        if len(text) > 500 or any(marker in lowered for marker in deep_markers):
+            return "deep", str(brain.get("deep_thinking", "high"))
+        if len(text) < 180:
+            return "fast", str(brain.get("fast_thinking", "low"))
+        return "default", str(
+            brain.get("default_thinking", brain.get("thinking", "low"))
+        )
+
+    def _context_prompt(self, text: str, user_id: str) -> str:
+        user = self.state.user(user_id)
+        parts = ["You are Jervis, a concise voice assistant."]
+        if user is not None:
+            parts.append("Current user: " + str(user["name"]) + ".")
+            if user["honorific"]:
+                label = "ma'am" if str(user["honorific"]) == "maam" else "sir"
+                parts.append("Preferred form of address: " + label + ".")
+
+        memories = self.state.memories(user_id, 12)
+        if memories:
+            parts.append(
+                "Explicit local memories:\n"
+                + "\n".join("- " + str(item["value"]) for item in reversed(memories))
+            )
+
+        dialogue = self.state.recent_user_dialogue(user_id, 8)
+        if dialogue:
+            parts.append(
+                "Recent local conversation context:\n"
+                + "\n".join(
+                    str(row["role"]) + ": " + str(row["text"])
+                    for row in dialogue
+                )
+            )
+
+        parts.append("Current user request:\n" + text)
+        return "\n\n".join(parts)
 
     def ask(
         self,
@@ -101,7 +164,13 @@ class BrainRouter:
             self.state.event("brain_route", "skill:" + str(skill_name))
             return RouteReply(True, skill_reply, "skill:" + str(skill_name))
 
-        self.state.event("brain_route", "openclaw")
+        tier, thinking = self._tier(text)
+        route_name = "openclaw:" + tier
+        self.state.event("brain_route", route_name)
         self.brain.agent = self.agents.selected(user_id, self.default_agent)
-        reply = self.brain.ask(text, "jervis:" + user_id)
-        return RouteReply(reply.ok, reply.text, "openclaw", reply.error)
+        reply = self.brain.ask(
+            self._context_prompt(text, user_id),
+            "jervis:" + user_id,
+            thinking=thinking,
+        )
+        return RouteReply(reply.ok, reply.text, route_name, reply.error)

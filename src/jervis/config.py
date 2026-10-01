@@ -55,6 +55,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "agent": "main",
         "timeout_seconds": 60,
         "thinking": "low",
+        "fast_thinking": "low",
+        "default_thinking": "low",
+        "deep_thinking": "high",
     },
     "privacy": {
         "persist_dialogue": True,

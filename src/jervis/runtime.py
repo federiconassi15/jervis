@@ -12,6 +12,7 @@ from .config import load
 from .identity import IdentityManager
 from .paths import Paths
 from .presence import PresenceManager
+from .proactive import ProactiveEngine
 from .router import BrainRouter
 from .sessions import SessionManager
 from .speaker import SpeakerRecognizer
@@ -79,10 +80,15 @@ class Runtime:
             brain["timeout_seconds"],
             brain["thinking"],
         )
-        self.router = BrainRouter(self.state, self.paths, self.brain)
+        self.router = BrainRouter(self.state, self.paths, self.brain, self.config)
         self.presence = PresenceManager(
             self.state,
             self.config["presence"]["timeout_seconds"],
+        )
+        self.proactive = ProactiveEngine(
+            self.state,
+            self.config["proactive"],
+            lambda message: self.speak(message),
         )
         self.running = True
         self._audio = None
@@ -341,6 +347,7 @@ class Runtime:
                     self.stt.maybe_unload()
                     if self.config["presence"]["enabled"]:
                         self.presence.sweep()
+                    self.proactive.tick()
                     continue
 
                 if not self.wake.process(frame):

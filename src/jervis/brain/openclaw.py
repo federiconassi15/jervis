@@ -54,7 +54,12 @@ class OpenClawBrain:
     def available(self) -> bool:
         return self.cli is not None
 
-    def ask(self, message: str, session_key: str) -> BrainReply:
+    def ask(
+        self,
+        message: str,
+        session_key: str,
+        thinking: str | None = None,
+    ) -> BrainReply:
         cli = self.cli
         if cli is None:
             return BrainReply(False, "", "OpenClaw is not installed")
@@ -68,7 +73,7 @@ class OpenClawBrain:
             "--message",
             message,
             "--thinking",
-            self.thinking,
+            thinking or self.thinking,
             "--timeout",
             str(self.timeout),
             "--json",
