@@ -24,6 +24,7 @@ class BrainRouter:
         self.state = state
         self.paths = paths
         self.brain = brain
+        self.default_agent = brain.agent
         self.agents = AgentHub(state)
         self.skills = SkillManager(
             [
@@ -56,7 +57,7 @@ class BrainRouter:
             return "Present: " + ", ".join(str(row["name"]) for row in rows) + "."
 
         if query in {"which agent are you using", "what agent are you using"}:
-            return "I'm using the " + self.agents.selected(user_id, self.brain.agent) + " OpenClaw agent."
+            return "I'm using the " + self.agents.selected(user_id, self.default_agent) + " OpenClaw agent."
 
         if query.startswith("use agent "):
             requested = text.strip()[10:].strip()
@@ -101,6 +102,6 @@ class BrainRouter:
             return RouteReply(True, skill_reply, "skill:" + str(skill_name))
 
         self.state.event("brain_route", "openclaw")
-        self.brain.agent = self.agents.selected(user_id, self.brain.agent)
+        self.brain.agent = self.agents.selected(user_id, self.default_agent)
         reply = self.brain.ask(text, "jervis:" + user_id)
         return RouteReply(reply.ok, reply.text, "openclaw", reply.error)
