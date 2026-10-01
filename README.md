@@ -8,9 +8,47 @@ Jervis 7.1 is a local voice shell for Linux, Windows, and macOS. It combines wak
 
 ### Fresh machine — recommended
 
-**Python is not required. Node.js is not required in advance.** Stable releases contain self-contained native Jervis binaries with the Python runtime bundled inside.
+Jervis does **not** require Python, Node.js, pip, npm, Git, or a pre-created virtual environment. Stable releases ship self-contained native Jervis binaries.
 
-Open the latest [GitHub Release](https://github.com/federiconassi15/jervis/releases/latest) and download the matching file:
+The bootstrap scripts only detect the OS/CPU, download the matching native release, verify its SHA-256 checksum, and launch it. Jervis then provisions the host pieces it actually needs.
+
+#### Linux / macOS
+
+If `curl` or `wget` already exists:
+
+    curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
+
+On a truly minimal Linux install with no downloader, use the stock package manager once and immediately hand off to Jervis. Example for bare Arch Linux:
+
+    pacman -Sy --needed --noconfirm curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
+
+`install.sh` also knows how to provision `curl` itself through pacman, apt, dnf, zypper, or apk when it is launched locally.
+
+#### Windows
+
+PowerShell is built into supported Windows installs:
+
+    irm https://raw.githubusercontent.com/federiconassi15/jervis/main/install.ps1 | iex
+
+### What the installer does
+
+The native installer:
+
+- detects Desktop vs Server setup,
+- installs missing Linux audio prerequisites when required,
+- detects or installs OpenClaw,
+- lets you choose microphone/output devices,
+- supports an Android phone as a microphone,
+- creates the first owner profile and local authentication passphrase,
+- installs managed startup,
+- verifies health before committing the install,
+- rolls back failed installation changes instead of leaving a half-install.
+
+Installer navigation is designed around **arrow keys and mouse input**. Text entry is only used where actual text is unavoidable, such as the owner name or passphrase.
+
+### Manual native downloads
+
+You can also download a verified release binary directly:
 
 - Windows x64: `jervis-windows-x64.exe`
 - Linux x64: `jervis-linux-x64`
@@ -18,29 +56,13 @@ Open the latest [GitHub Release](https://github.com/federiconassi15/jervis/relea
 - macOS Apple Silicon: `jervis-macos-arm64`
 - macOS Intel: `jervis-macos-x64`
 
-Run the downloaded binary. On its first launch it opens the same blue Jervis installer, copies the verified native runtime into the user's Jervis data directory, and configures the operating-system startup integration.
+The release also includes `SHA256SUMS` and both bootstrap scripts.
 
-The release also contains **`jervis-installer-all-platforms.zip`**, one download containing every native build.
+### Developer install
 
-### Command-line download
+Python 3.11+ is only required for source development and tests:
 
-A stock Windows shell and a POSIX shell do not share one guaranteed command language or downloader, so there is no honest literal one-liner that can execute unchanged on every freshly installed Windows, macOS, and Linux system. Jervis therefore provides native release binaries that require no language runtime.
-
-Windows PowerShell:
-
-    iwr https://github.com/federiconassi15/jervis/releases/latest/download/jervis-windows-x64.exe -OutFile jervis.exe; .\jervis.exe
-
-macOS Apple Silicon:
-
-    curl -fL https://github.com/federiconassi15/jervis/releases/latest/download/jervis-macos-arm64 -o jervis && chmod +x jervis && ./jervis
-
-Linux x64:
-
-    curl -fL https://github.com/federiconassi15/jervis/releases/latest/download/jervis-linux-x64 -o jervis && chmod +x jervis && ./jervis
-
-### Python / developer install
-
-Python 3.11+ users can still use the universal source bootstrap or `jervis-installer.pyz` from Releases.
+    python -m pip install -e ".[dev]"
 
 ## Desktop or Server
 
@@ -77,10 +99,6 @@ Jervis 7.1 identifies from the longer natural command rather than trying to auth
     jervis update-check
 
 ## Wiki
-
-The in-repository Jervis wiki contains **381 pages** of installation, architecture, audio, voice, identity, OpenClaw, Control Deck, platform, security, state, skills, agents, operations, development, configuration, troubleshooting, and reference documentation.
-
-Start here: [Jervis Wiki Home](docs/wiki/Home.md)
 
 Canonical technical docs:
 
