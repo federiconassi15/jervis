@@ -89,9 +89,18 @@ def test_installer_arrow_navigation():
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             assert app.step == 0
+            mode = app.query_one("#mode")
+            assert mode.value == "desktop"
+            await pilot.press("right")
+            await pilot.pause()
+            assert mode.value == "server"
+
+            app.query_one("#next").focus()
             await pilot.press("right")
             await pilot.pause()
             assert app.step == 1
+
+            app.query_one("#back").focus()
             await pilot.press("left")
             await pilot.pause()
             assert app.step == 0

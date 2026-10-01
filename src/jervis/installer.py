@@ -260,6 +260,13 @@ class JervisInstaller(App[int]):
         self.progress_title = "Preparing…"
         self.progress_detail = ""
         self.inputs, self.outputs, self.androids = self._detect_audio()
+        self.select_values = {
+            "mode": ["desktop", "server"],
+            "openclaw-auth": ["codex", "api-key", "full", "later"],
+            "microphone": [value for _label, value in self.inputs],
+            "output": [value for _label, value in self.outputs],
+            "honorific": ["sir", "maam"],
+        }
         self.openclaw = find_openclaw()
 
     def _detect_audio(self):
@@ -843,10 +850,9 @@ class JervisInstaller(App[int]):
         if not isinstance(focused, Select):
             return False
 
-        options = list(focused._options)
-        values = [option.value for option in options]
+        values = self.select_values.get(str(focused.id or ""), [])
         if not values:
-            return True
+            return False
 
         current = focused.value
         try:
