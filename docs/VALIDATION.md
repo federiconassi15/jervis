@@ -1,70 +1,63 @@
-# Jervis 7.1 RC Validation Snapshot
+# Jervis 7.1 Validation Gates
 
-Validated source head before this report: `f7f8d83018bd08474bd34456fa7e825c44ef86a8`.
+This file describes the validation contract for the current release-candidate branch. It intentionally does **not** hard-code an old commit SHA, run number, wiki-page count, or installer format.
 
-## GitHub Actions
+## Automated CI
 
-The cross-platform CI workflow completed successfully on the validated head.
+Every push to `main` or `build/**` runs the latest branch head through:
 
-Passed jobs:
-
-- Ubuntu latest / Python 3.11
-- Ubuntu latest / Python 3.13
-- Windows latest / Python 3.11
-- Windows latest / Python 3.13
-- macOS latest / Python 3.11
-- macOS latest / Python 3.13
-- Universal release artifact
-
-Across the matrix, the following checks completed successfully:
-
-- editable test-environment installation
-- compilation of every Python source/test/script/bootstrap file
-- repository verifier
-- smoke test
+- Ubuntu, Windows, and macOS on Python 3.11 and 3.13 for source/developer compatibility
+- compilation of source, tests, and scripts
+- repository UTF-8 / syntax / merge-marker / local-link verification
+- smoke tests
 - unit tests
 - Ruff correctness checks
+- wheel and source-distribution builds
+- native bootstrap syntax checks
+- self-contained native binary builds and smoke verification for:
+  - Linux x64
+  - Linux ARM64
+  - Windows x64
+  - macOS Intel
+  - macOS Apple Silicon
 
-The release-artifact job also successfully:
+CI uses branch-level concurrency so stale runs are cancelled when a newer commit supersedes them.
 
-- built the wheel and source distribution
-- built the universal installer
-- verified the universal installer
-- compiled the bootstrap entry points
+## Fresh-machine installer contract
 
-## Repository verifier
+The public install path must not require a preinstalled Python, Node.js, npm, pip, Git, or virtual environment.
 
-The verifier checks:
+- `install.sh` detects Linux/macOS architecture, obtains the matching native binary, verifies `SHA256SUMS`, and launches it.
+- `install.ps1` performs the equivalent flow on Windows.
+- the native binary carries the Jervis Python runtime internally.
+- Linux host libraries or command-line tools that Jervis actually needs are provisioned through the host package manager inside the setup flow.
+- installer navigation is mouse + arrow-key driven; raw pre-TUI yes/no prompts are forbidden.
 
-- UTF-8 decoding
-- unexpected control characters
+## Repository hygiene gates
+
+The repository verifier rejects:
+
+- invalid UTF-8
+- unexpected control bytes
 - unresolved merge-conflict markers
-- Python syntax
-- JSON syntax
-- TOML syntax
-- YAML syntax when PyYAML is available
-- local Markdown links
-- package/bootstrap version consistency
-- minimum wiki page count
+- invalid Python/JSON/TOML/YAML syntax
+- broken local Markdown links
+- version mismatches
+- missing native bootstrap scripts
+- reintroduction of the obsolete Python bootstrap entrypoints
 
-The validated repository contains 381 in-repository wiki pages.
+## Manual release gate
 
-## Public-build hygiene scan
+Before merging the RC into `main`, review:
 
-All 71 non-wiki product, test, release, workflow, and packaging files were separately inspected for legacy/private development artifacts, including:
+1. installer rollback and fresh-machine bootstrap
+2. identity/authentication and permission boundaries
+3. audio input/output and Android ADB input
+4. OpenClaw discovery, install, auth, agent selection, and degradation
+5. per-user state, memory, presence, and speaker learning
+6. local/skill/OpenClaw routing
+7. proactive quiet-hours behavior and component repair
+8. Control Deck panels and timeline observability
+9. startup adapters on Linux, Windows, and macOS
 
-- old machine-specific Umbrel references
-- Jervis 6-specific runtime naming
-- old container-specific identifiers
-- hard-coded private LAN addresses
-- development phone identifiers
-- private example-person tailoring
-- unresolved conflict markers
-- TODO/FIXME markers
-- accidental placeholder implementation text
-
-No product-code findings remained. The only textual `placeholder` match was the intentional GitHub issue-template YAML field named `placeholder`.
-
-## Scope
-
-This document records automated/static validation. It does not claim that non-trivial software can be proven bug-free. The next release stage is the separate manual critical-file review of installer, runtime, identity/authentication, audio, OpenClaw, and platform-specific paths before merging to `main`.
+A release is not considered ready merely because one historical workflow run passed.

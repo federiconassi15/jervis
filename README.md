@@ -14,15 +14,15 @@ The bootstrap scripts only detect the OS/CPU, download the matching native relea
 
 #### Linux / macOS
 
-If `curl` or `wget` already exists:
+Normal Linux/macOS:
 
     curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
 
-On a truly minimal Linux install with no downloader, use the stock package manager once and immediately hand off to Jervis. Example for bare Arch Linux:
+Bare Arch Linux (no Python, Node, Git, curl, or wget preinstalled):
 
     pacman -Sy --needed --noconfirm curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
 
-`install.sh` also knows how to provision `curl` itself through pacman, apt, dnf, zypper, or apk when it is launched locally.
+The bootstrap itself uses only the host shell and native OS facilities. Once started, `install.sh` can provision its own downloader through pacman, apt, dnf, zypper, or apk when curl/wget is absent. A network installer cannot literally fetch bytes without either a stock downloader or the OS package manager, so Jervis deliberately depends on neither Python nor another language runtime.
 
 #### Windows
 
@@ -96,6 +96,9 @@ Jervis 7.1 identifies from the longer natural command rather than trying to auth
     jervis run
     jervis doctor
     jervis install
+    jervis doctor
+    jervis repair audio
+    jervis repair openclaw
     jervis update-check
 
 ## Wiki
