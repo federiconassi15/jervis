@@ -2,6 +2,40 @@
 
 All notable public changes to Jervis are documented here.
 
+Release descriptions are derived from actual code diffs and mirrored in `docs/releases/`.
+
+## [7.3.0] - Unreleased
+
+### Added
+
+- Optional Rust/PyO3 acceleration for audio analysis and VAD, with NumPy fallback.
+- OpenClaw Gateway HTTP fast transport with CLI fallback.
+- Background STT, speaker, wake, and common-TTS prewarming.
+- Batched brain context snapshots and transport telemetry.
+- 7.3 fast-path regression tests.
+
+### Changed
+
+- Rebuilt SQLite hot-path behavior around WAL/NORMAL, periodic pruning, and cached embeddings.
+- Switched normal Whisper decoding to a beam-1 low-latency profile and longer warm retention.
+- Vectorized speaker matching.
+- Replaced desktop microphone `queue.Queue` buffering with a lighter condition/deque.
+- Cached Android resampling axes, activity writes, volume reads, CLI discovery, and barge-in leakage baseline.
+
+### Removed
+
+- Repeated per-turn SQLite pruning scans.
+- Repeated OpenClaw CLI path discovery.
+- Repeated per-embedding normalization/JSON parsing in speaker matching.
+- Redundant Whisper VAD after Jervis capture VAD.
+- Desktop audio `queue.Queue` hot-path overhead.
+
+### Fixed
+
+- Retention batching still honors very small configured history limits.
+- Transport telemetry remains compatible with non-OpenClaw test brains.
+- Compact-terminal nav overflow inherited from the 7.1 installer.
+
 ## [7.1.1] - 2026-10-01
 
 ### Added

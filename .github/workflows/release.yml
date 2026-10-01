@@ -31,8 +31,8 @@ jobs:
           if not match:
               raise SystemExit("Could not read Jervis version")
           version = match.group(1)
-          if not re.fullmatch(r"7\.1\.\d+", version):
-              raise SystemExit("Release workflow only publishes 7.1.x")
+          if not re.fullmatch(r"7\.\d+\.\d+", version):
+              raise SystemExit("Release workflow only publishes Jervis 7.x")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("version=" + version + "\n")
 
@@ -99,6 +99,11 @@ jobs:
     needs: [metadata, source, native]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Verify release description exists
+        shell: bash
+        run: |
+          test -f "docs/releases/${{ needs.metadata.outputs.version }}.md"
       - uses: actions/download-artifact@v4
         with:
           path: release
@@ -138,6 +143,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: false
           draft: false
-          generate_release_notes: true
+          body_path: docs/releases/${{ needs.metadata.outputs.version }}.md
+          generate_release_notes: false
           files: |
             release/*

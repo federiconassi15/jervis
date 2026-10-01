@@ -1,0 +1,35 @@
+name: Sync Release Descriptions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/releases/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync code-derived release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for file in docs/releases/*.md; do
+            version="$(basename "$file" .md)"
+            tag="v$version"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Updating $tag from $file"
+              gh release edit "$tag" --notes-file "$file"
+            else
+              echo "Skipping $tag: release does not exist yet"
+            fi
+          done
