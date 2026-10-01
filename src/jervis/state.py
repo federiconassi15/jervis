@@ -42,6 +42,24 @@ CREATE TABLE IF NOT EXISTS events(
   detail TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
+CREATE TABLE IF NOT EXISTS memories(
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  updated_at REAL NOT NULL,
+  PRIMARY KEY(user_id,key)
+);
+CREATE INDEX IF NOT EXISTS idx_memories_user_updated
+  ON memories(user_id,updated_at DESC);
+CREATE TABLE IF NOT EXISTS presence(
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  confidence REAL NOT NULL DEFAULT 0,
+  present INTEGER NOT NULL DEFAULT 1,
+  seen_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(seen_at DESC);
 CREATE TABLE IF NOT EXISTS kv(
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -219,3 +237,91 @@ class State:
         for row in rows:
             out.setdefault(row["user_id"], []).append(json.loads(row["embedding"]))
         return out
+
+
+    def remember(self, user_id: str, key: str, value: Any) -> None:
+        clean = key.strip()
+        if not clean:
+            raise ValueError("memory key cannot be empty")
+        now = time.time()
+        with self._lock:
+            self._db.execute(
+                """
+                INSERT INTO memories(user_id,key,value,created_at,updated_at)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(user_id,key) DO UPDATE SET
+                  value=excluded.value,
+                  updated_at=excluded.updated_at
+                """,
+                (user_id, clean, json.dumps(value), now, now),
+            )
+            self._db.commit()
+
+    def memory(self, user_id: str, key: str, default: Any = None) -> Any:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT value FROM memories WHERE user_id=? AND key=?",
+                (user_id, key.strip()),
+            ).fetchone()
+        return default if row is None else json.loads(row["value"])
+
+    def memories(self, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = list(
+                self._db.execute(
+                    "SELECT key,value,created_at,updated_at FROM memories "
+                    "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
+        return [
+            {
+                "key": str(row["key"]),
+                "value": json.loads(row["value"]),
+                "created_at": float(row["created_at"]),
+                "updated_at": float(row["updated_at"]),
+            }
+            for row in rows
+        ]
+
+    def forget_memory(self, user_id: str, key: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "DELETE FROM memories WHERE user_id=? AND key=?",
+                (user_id, key.strip()),
+            )
+            self._db.commit()
+
+    def set_presence(
+        self,
+        user_id: str,
+        source: str,
+        confidence: float,
+        present: bool = True,
+    ) -> None:
+        now = time.time()
+        with self._lock:
+            self._db.execute(
+                """
+                INSERT INTO presence(user_id,source,confidence,present,seen_at)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                  source=excluded.source,
+                  confidence=excluded.confidence,
+                  present=excluded.present,
+                  seen_at=excluded.seen_at
+                """,
+                (user_id, source, float(confidence), 1 if present else 0, now),
+            )
+            self._db.commit()
+
+    def presence(self, present_only: bool = False) -> list[sqlite3.Row]:
+        query = (
+            "SELECT p.user_id,u.name,p.source,p.confidence,p.present,p.seen_at "
+            "FROM presence p JOIN users u ON u.id=p.user_id "
+        )
+        if present_only:
+            query += "WHERE p.present=1 "
+        query += "ORDER BY p.seen_at DESC"
+        with self._lock:
+            return list(self._db.execute(query))
