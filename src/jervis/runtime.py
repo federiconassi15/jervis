@@ -158,11 +158,22 @@ class Runtime:
             audio["sample_rate"],
         )
 
-    def capture(self, audio, first=None, max_seconds: float = 12.0) -> np.ndarray:
+    def capture(
+        self,
+        audio,
+        first=None,
+        max_seconds: float | None = None,
+    ) -> np.ndarray:
         chunks = [] if first is None else [first]
         speaking = first is not None
         silence = None
-        deadline = time.monotonic() + float(max_seconds)
+        endpoint = float(self.config["speech"].get("endpoint_silence_seconds", 0.45))
+        limit = (
+            float(max_seconds)
+            if max_seconds is not None
+            else float(self.config["speech"].get("max_command_seconds", 12.0))
+        )
+        deadline = time.monotonic() + limit
 
         while self.running and time.monotonic() < deadline:
             try:
@@ -177,7 +188,7 @@ class Runtime:
             elif speaking:
                 chunks.append(frame)
                 silence = silence or time.monotonic()
-                if time.monotonic() - silence >= 0.75:
+                if time.monotonic() - silence >= endpoint:
                     break
 
         return (

@@ -21,6 +21,7 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 - Vectorized speaker matching.
 - Replaced desktop microphone `queue.Queue` buffering with a lighter condition/deque.
 - Cached Android resampling axes, activity writes, volume reads, CLI discovery, and barge-in leakage baseline.
+- Reduced configurable end-of-command silence endpoint from the old fixed 750 ms to 450 ms by default.
 
 ### Removed
 

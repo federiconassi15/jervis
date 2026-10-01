@@ -40,6 +40,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "stt_prewarm": True,
         "stt_keep_warm_seconds": 900,
         "stt_beam_size": 1,
+        "endpoint_silence_seconds": 0.45,
+        "max_command_seconds": 12.0,
     },
     "identity": {
         "enabled": True,
@@ -106,6 +108,11 @@ def validate(config) -> None:
     volume = float(config["audio"]["jervis_volume"])
     if not 0.05 <= volume <= 2.0:
         raise ValueError("audio.jervis_volume must be between 0.05 and 2.0")
+
+    speech = config["speech"]
+    endpoint = float(speech["endpoint_silence_seconds"])
+    if not 0.2 <= endpoint <= 2.0:
+        raise ValueError("speech.endpoint_silence_seconds must be between 0.2 and 2.0")
 
     presence = config["presence"]
     if int(presence["timeout_seconds"]) < 30:
