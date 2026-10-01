@@ -31,6 +31,8 @@ def main() -> None:
         args.name,
         "--paths",
         str(ROOT / "src"),
+        "--hidden-import",
+        "jervis._fast",
     ]
     for package in COLLECT:
         command += ["--collect-all", package]

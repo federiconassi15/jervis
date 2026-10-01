@@ -61,6 +61,22 @@ def main() -> None:
     if "usage:" not in help_output.lower() or "jervis" not in help_output.lower():
         raise SystemExit("native verification failed: unexpected --help output: " + help_output)
 
+    info_proc = subprocess.run(
+        [str(path.resolve()), "runtime-info"],
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    info_output = (info_proc.stdout + info_proc.stderr).strip()
+    if info_proc.returncode != 0:
+        raise SystemExit("native runtime-info failed: " + info_output)
+    if '"native_acceleration": true' not in info_output.lower():
+        raise SystemExit(
+            "native verification failed: Rust acceleration is not bundled: "
+            + info_output
+        )
+
     print("native verification PASS: " + str(path))
 
 

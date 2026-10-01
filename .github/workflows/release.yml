@@ -45,8 +45,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Build source packages and native bootstrap scripts
+        env:
+          JERVIS_NO_RUST: "1"
         run: |
-          python -m pip install --upgrade build
+          python -m pip install --upgrade build setuptools-rust
           python -m build
           sh -n install.sh
           pwsh -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw install.ps1))"
@@ -81,11 +83,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
       - name: Linux audio build prerequisites
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libportaudio2 espeak-ng
       - name: Install native build environment
         run: python -m pip install . "pyinstaller>=6,<7"
+      - name: Verify Rust acceleration built
+        run: python -c "from jervis.fast import NATIVE_AVAILABLE, backend_name; assert NATIVE_AVAILABLE, backend_name()"
       - name: Build native Jervis
         run: python scripts/build_native.py --name ${{ matrix.asset }}
       - name: Verify native Jervis
