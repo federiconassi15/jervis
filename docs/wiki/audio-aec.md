@@ -1,61 +1,44 @@
-# Audio: Aec
+# Audio: Acoustic echo cancellation
 
-## Purpose
+## Status in Jervis 7.1
 
-This page documents **Aec** in the **Audio** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.
+Jervis 7.1 **does not claim a live acoustic echo-cancellation pipeline**. The
+configuration key exists for forward compatibility, but its public default is
+off.
 
-## How it works
+The 7.1 runtime instead avoids mixing Jervis's own speech into the next command
+as much as possible by:
 
-Jervis keeps OS-specific behavior behind platform adapters while the voice loop, identity sessions, permissions, state, skills, and OpenClaw routing remain shared. Aec should therefore behave consistently even when the host operating system uses a different audio API, startup manager, or filesystem convention.
+- playing Jervis speech through the explicitly selected output device;
+- pausing command capture while Jervis is speaking;
+- flushing queued microphone frames immediately after speech playback;
+- beginning the next capture from fresh microphone data.
 
-For the 7.1 reliability line, the default interaction is: wake word → **Boss?** acknowledgement → capture the full natural command → evaluate the trusted session and speaker evidence → route locally or through OpenClaw → keep the same speaker locked through the follow-up window.
+This is deliberately documented as playback/capture separation, not AEC.
 
-## Desktop and Server behavior
+## Why the distinction matters
 
-**Desktop mode** uses the user's normal computer audio devices. Setup enumerates available microphones and outputs and asks which ones Jervis should use. An Android phone may be selected as the microphone.
+True AEC needs a synchronized far-end reference of the audio being played,
+along with the microphone stream. Merely lowering a microphone threshold or
+discarding a few frames is not acoustic echo cancellation.
 
-**Server mode** uses the same runtime but emphasizes persistent startup, explicit device choices, and remote-friendly diagnostics. It is suitable for a NUC, home server, workstation, or other always-on machine.
+A future Jervis release may add a cross-platform WebRTC-style audio processor,
+but it must be wired to both streams and validated on Linux, Windows, and
+macOS before the AEC setting is enabled by default.
 
-## Cross-platform notes
+## Troubleshooting self-echo
 
-- **Linux:** managed startup uses a systemd user service where available.
-- **Windows:** per-user managed startup uses Task Scheduler.
-- **macOS:** managed startup uses launchd.
-- Desktop audio is exposed through the host PortAudio backend.
-- Android AudioSource uses ADB forwarding to a localhost TCP socket, so the Jervis-side transport is shared across all three operating systems.
+If Jervis hears its own voice:
 
-## Reliability rules
-
-1. Do not turn one noisy voice sample into an authentication loop.
-2. Keep expensive speech and speaker models lazy where practical.
-3. Bound histories, queues, caches, and stored embeddings.
-4. Repair the smallest failed component before restarting the whole runtime.
-5. Keep the local shell useful when OpenClaw or a model provider is unavailable.
-6. Treat speaker recognition as a convenience identity signal, not high-assurance security.
-
-## Privacy and security
-
-Never commit provider credentials, authentication passphrases, voiceprints, raw recordings, private dialogue, Android serial numbers, private IP addresses, or personal filesystem paths. Jervis stores authentication passphrases as PBKDF2-HMAC-SHA256 verifiers rather than plaintext. Raw microphone audio is not intended to be persisted by default.
-
-## Diagnostics
-
-Start with `jervis doctor`. For agentic-brain problems, also use `openclaw doctor`. The Control Deck timeline should show wake, identity, routing, provider, and repair events with timestamps so failures can be diagnosed without guessing.
-
-When debugging Aec, verify configuration and selected devices before changing recognition thresholds. Threshold changes should be a last step after confirming that audio quality and session state are healthy.
-
-## Development checklist
-
-- Test the normal path.
-- Test at least one failure path.
-- Consider Windows, macOS, and Linux behavior.
-- Consider Desktop and Server modes.
-- Avoid blocking or hot-polling work in the always-on loop.
-- Avoid logging secrets or authentication text.
-- Preserve rollback and doctor behavior when setup files change.
+1. Lower the physical speaker level or increase microphone distance.
+2. Confirm the configured output device is the device actually playing Jervis.
+3. Confirm the microphone queue is being flushed after speech.
+4. Prefer headphones while diagnosing.
+5. Do not compensate by aggressively raising speaker-recognition thresholds.
 
 ## Related pages
 
 - [Audio index](audio-index.md)
-- [Wiki Home](Home.md)
-- [Previous](audio-vad.md)
-- [Next](audio-barge-in.md)
+- [Barge-in](audio-barge-in.md)
+- [Desktop input](audio-desktop-input.md)
+- [Desktop output](audio-desktop-output.md)

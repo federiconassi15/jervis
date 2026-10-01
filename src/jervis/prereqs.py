@@ -20,7 +20,9 @@ def _sudo() -> list[str]:
         return []
     sudo = shutil.which("sudo")
     if not sudo:
-        raise RuntimeError("administrator privileges are required for this dependency")
+        raise RuntimeError(
+            "administrator privileges are required for this dependency"
+        )
     return [sudo]
 
 
@@ -30,28 +32,89 @@ def portaudio_available() -> bool:
     return ctypes.util.find_library("portaudio") is not None
 
 
+def linux_tts_available() -> bool:
+    if platform.system() != "Linux":
+        return True
+    return bool(shutil.which("espeak-ng") or shutil.which("espeak"))
+
+
 def ensure_linux_audio(prompt: Prompt) -> None:
-    if platform.system() != "Linux" or portaudio_available():
+    if platform.system() != "Linux":
         return
-    if not prompt("Linux audio libraries are missing. Install PortAudio and fallback TTS now?"):
-        raise RuntimeError("PortAudio is required for desktop audio on Linux")
+
+    need_portaudio = not portaudio_available()
+    need_tts = not linux_tts_available()
+    if not need_portaudio and not need_tts:
+        return
+
+    missing = []
+    if need_portaudio:
+        missing.append("PortAudio")
+    if need_tts:
+        missing.append("espeak-ng fallback TTS")
+
+    if not prompt(
+        "Linux prerequisites are missing ("
+        + ", ".join(missing)
+        + "). Install them now?"
+    ):
+        raise RuntimeError(
+            "Jervis requires the selected Linux audio/TTS prerequisites"
+        )
 
     prefix = _sudo()
     if shutil.which("apt-get"):
-        _run(prefix + ["apt-get", "install", "-y", "libportaudio2", "espeak-ng"])
+        packages = []
+        if need_portaudio:
+            packages.append("libportaudio2")
+        if need_tts:
+            packages.append("espeak-ng")
+        _run(prefix + ["apt-get", "install", "-y", *packages])
     elif shutil.which("dnf"):
-        _run(prefix + ["dnf", "install", "-y", "portaudio", "espeak-ng"])
+        packages = []
+        if need_portaudio:
+            packages.append("portaudio")
+        if need_tts:
+            packages.append("espeak-ng")
+        _run(prefix + ["dnf", "install", "-y", *packages])
     elif shutil.which("pacman"):
-        _run(prefix + ["pacman", "-S", "--needed", "--noconfirm", "portaudio", "espeak-ng"])
+        packages = []
+        if need_portaudio:
+            packages.append("portaudio")
+        if need_tts:
+            packages.append("espeak-ng")
+        _run(
+            prefix
+            + ["pacman", "-S", "--needed", "--noconfirm", *packages]
+        )
     elif shutil.which("zypper"):
-        _run(prefix + ["zypper", "--non-interactive", "install", "portaudio", "espeak-ng"])
+        packages = []
+        if need_portaudio:
+            packages.append("portaudio")
+        if need_tts:
+            packages.append("espeak-ng")
+        _run(
+            prefix
+            + ["zypper", "--non-interactive", "install", *packages]
+        )
     elif shutil.which("apk"):
-        _run(prefix + ["apk", "add", "portaudio", "espeak-ng"])
+        packages = []
+        if need_portaudio:
+            packages.append("portaudio")
+        if need_tts:
+            packages.append("espeak-ng")
+        _run(prefix + ["apk", "add", *packages])
     else:
         raise RuntimeError("no supported Linux package manager was found")
 
-    if not portaudio_available():
-        raise RuntimeError("PortAudio installation completed but the library is still unavailable")
+    if need_portaudio and not portaudio_available():
+        raise RuntimeError(
+            "PortAudio installation completed but the library is still unavailable"
+        )
+    if need_tts and not linux_tts_available():
+        raise RuntimeError(
+            "fallback TTS installation completed but espeak is still unavailable"
+        )
 
 
 def find_adb() -> Path | None:
@@ -62,15 +125,26 @@ def find_adb() -> Path | None:
     candidates: list[Path] = []
     home = Path.home()
     if platform.system() == "Windows":
-        local = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+        local = Path(
+            os.environ.get(
+                "LOCALAPPDATA",
+                home / "AppData" / "Local",
+            )
+        )
         candidates += [
             local / "Microsoft" / "WinGet" / "Links" / "adb.exe",
             local / "Android" / "Sdk" / "platform-tools" / "adb.exe",
         ]
     elif platform.system() == "Darwin":
-        candidates += [Path("/opt/homebrew/bin/adb"), Path("/usr/local/bin/adb")]
+        candidates += [
+            Path("/opt/homebrew/bin/adb"),
+            Path("/usr/local/bin/adb"),
+        ]
     else:
-        candidates += [Path("/usr/bin/adb"), Path("/usr/local/bin/adb")]
+        candidates += [
+            Path("/usr/bin/adb"),
+            Path("/usr/local/bin/adb"),
+        ]
 
     return next((path for path in candidates if path.exists()), None)
 
@@ -84,10 +158,17 @@ def ensure_adb(prompt: Prompt) -> Path:
 
     system = platform.system()
     if system == "Windows" and shutil.which("winget"):
-        _run([
-            "winget", "install", "--id", "Google.PlatformTools", "--exact",
-            "--accept-package-agreements", "--accept-source-agreements",
-        ])
+        _run(
+            [
+                "winget",
+                "install",
+                "--id",
+                "Google.PlatformTools",
+                "--exact",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ]
+        )
     elif system == "Darwin" and shutil.which("brew"):
         _run(["brew", "install", "--cask", "android-platform-tools"])
     elif system == "Linux":
@@ -97,15 +178,38 @@ def ensure_adb(prompt: Prompt) -> Path:
         elif shutil.which("dnf"):
             _run(prefix + ["dnf", "install", "-y", "android-tools"])
         elif shutil.which("pacman"):
-            _run(prefix + ["pacman", "-S", "--needed", "--noconfirm", "android-tools"])
+            _run(
+                prefix
+                + [
+                    "pacman",
+                    "-S",
+                    "--needed",
+                    "--noconfirm",
+                    "android-tools",
+                ]
+            )
         elif shutil.which("zypper"):
-            _run(prefix + ["zypper", "--non-interactive", "install", "android-tools"])
+            _run(
+                prefix
+                + [
+                    "zypper",
+                    "--non-interactive",
+                    "install",
+                    "android-tools",
+                ]
+            )
         else:
-            raise RuntimeError("no supported package manager can install ADB")
+            raise RuntimeError(
+                "no supported package manager can install ADB"
+            )
     else:
-        raise RuntimeError("install Android Platform Tools manually and rerun Jervis setup")
+        raise RuntimeError(
+            "install Android Platform Tools manually and rerun Jervis setup"
+        )
 
     result = find_adb()
     if not result:
-        raise RuntimeError("ADB installed but is not discoverable in the current session")
+        raise RuntimeError(
+            "ADB installed but is not discoverable in the current session"
+        )
     return result

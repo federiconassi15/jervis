@@ -1,62 +1,45 @@
-# Platforms: Macos
+# Platforms: macOS
 
-## Purpose
+## Runtime model
 
-This page covers **Macos** for the **Platforms** subsystem in Jervis 7.1. The goal is to keep the feature understandable, inspectable, and portable across Windows, macOS, and Linux without splitting Jervis into separate products.
+macOS uses the same Jervis core, config schema, trusted-session logic,
+OpenClaw integration, and Control Deck as Linux and Windows.
 
-## Runtime relationship
+Desktop audio uses CoreAudio through PortAudio. Android AudioSource can also be
+selected through ADB.
 
-Jervis separates the always-on local shell from the OpenClaw brain. Wake detection, audio capture, session identity, local state, permissions, and diagnostics should continue operating when OpenClaw or an external model provider is unavailable. Macos must respect that failure boundary.
+## Startup
 
-The active conversation model favors continuity: once a user is strongly identified or explicitly authenticated, Jervis maintains a trusted session and refreshes it through natural follow-up turns. A single uncertain sample should produce a retry or session-assisted result, not an immediate password loop.
+Jervis 7.1 uses a per-user launchd **LaunchAgent**. This keeps Jervis inside
+the logged-in user's GUI/CoreAudio session, where microphone privacy
+permissions and normal audio devices are available.
 
-## Deployment behavior
+## Server mode
 
-Desktop mode integrates with the current user's normal audio devices and login session. Server mode uses the same feature set but prioritizes persistence, explicit hardware selection, and remote diagnostics. Platform adapters translate Jervis lifecycle operations into systemd, Task Scheduler, or launchd.
+Server mode on macOS means a persistent background LaunchAgent for the Jervis
+user. It deliberately does **not** install a LaunchDaemon in the system domain.
 
-## Configuration
+That choice avoids pretending a system LaunchDaemon has the same CoreAudio and
+TCC microphone access as the user session. The voice assistant still starts
+automatically for the configured user and is kept alive by launchd.
 
-Configuration is validated before activation and written atomically. Avoid embedding OS paths, usernames, IP addresses, device serials, provider keys, or personal identity values into source code. Machine-specific choices belong in local configuration or state.
+A future version can add a different privileged/headless architecture if it
+can preserve microphone permissions and audio parity correctly.
 
-## Operational guidance
+## Privacy permissions
 
-For Macos, prefer observable state over hidden behavior. Important transitions should emit events into the timeline, and errors should be actionable. Long-running background work should be event-driven or rate-limited so a low-resource server is not punished by idle polling.
+The first microphone use may trigger macOS privacy consent. Grant microphone
+access to the terminal/runtime process Jervis is using. If capture is silent,
+check **System Settings → Privacy & Security → Microphone** before changing
+recognition thresholds.
 
-## Security rules
+## Diagnostics
 
-- Treat microphone data and speaker embeddings as sensitive local data.
-- Do not log spoken passwords or TUI authentication secrets.
-- Enforce permissions at the action boundary.
-- Do not assume a recognized voice is sufficient for destructive or privileged operations.
-- Keep third-party skills and agents isolated from secrets they do not need.
-
-## Cross-platform behavior
-
-The shared Python core owns semantics. OS adapters own startup and host integration only. Tests should prove that platform-specific code can be imported safely on the other operating systems without executing unavailable host commands.
-
-## Troubleshooting flow
-
-1. Run `jervis doctor`.
-2. Check the Control Deck timeline.
-3. Confirm the active config path and selected devices.
-4. Check service state on the current OS.
-5. If OpenClaw is involved, run `openclaw doctor`.
-6. Reproduce with sanitized logs before changing thresholds or reinstalling.
-
-## Development checklist
-
-- Normal path tested.
-- Failure path tested.
-- No secret leakage.
-- Bounded storage and queues.
-- No unnecessary busy loop.
-- Works with missing optional provider.
-- Rollback path still valid.
-- Documentation updated when user-facing behavior changes.
+Run `jervis doctor`, inspect the LaunchAgent with launchctl, and confirm the
+selected CoreAudio devices are visible in the logged-in user session.
 
 ## Related pages
 
 - [Platforms index](platforms-index.md)
-- [Wiki Home](Home.md)
-- [Previous](platforms-windows.md)
-- [Next](platforms-desktop-vs-server.md)
+- [Desktop versus server](platforms-desktop-vs-server.md)
+- [launchd](platforms-launchd.md)
