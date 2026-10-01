@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .agents import AgentHub
 from .brain import OpenClawBrain
 from .skills import SkillManager
 
@@ -23,6 +24,7 @@ class BrainRouter:
         self.state = state
         self.paths = paths
         self.brain = brain
+        self.agents = AgentHub(state)
         self.skills = SkillManager(
             [
                 Path(paths.data) / "skills",
@@ -52,6 +54,15 @@ class BrainRouter:
             if not rows:
                 return "I don't currently have anyone marked as present."
             return "Present: " + ", ".join(str(row["name"]) for row in rows) + "."
+
+        if query in {"which agent are you using", "what agent are you using"}:
+            return "I'm using the " + self.agents.selected(user_id, self.brain.agent) + " OpenClaw agent."
+
+        if query.startswith("use agent "):
+            requested = text.strip()[10:].strip()
+            if self.agents.select(user_id, requested):
+                return "I'll use the " + requested + " agent for you."
+            return "I couldn't find an OpenClaw agent named " + requested + "."
 
         if query in {"what do you remember about me", "what do you remember"}:
             memories = self.state.memories(user_id, 8)
@@ -90,5 +101,6 @@ class BrainRouter:
             return RouteReply(True, skill_reply, "skill:" + str(skill_name))
 
         self.state.event("brain_route", "openclaw")
+        self.brain.agent = self.agents.selected(user_id, self.brain.agent)
         reply = self.brain.ask(text, "jervis:" + user_id)
         return RouteReply(reply.ok, reply.text, "openclaw", reply.error)
