@@ -194,8 +194,8 @@ class JervisInstaller(App[int]):
     """
 
     BINDINGS = [
-        ("escape", "back", "Back"),
-        ("ctrl+c", "quit", "Quit"),
+        ("up", "previous_control", "Previous control"),
+        ("down", "next_control", "Next control"),
         ("left", "previous_control", "Previous control"),
         ("right", "next_control", "Next control"),
     ]
@@ -331,7 +331,7 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-audio"):
                     yield Static("Choose how Jervis hears and speaks", classes="title")
                     yield Static(
-                        "Use the detected devices below. Mouse and keyboard both work.",
+                        "Use the detected devices below. Navigate with the arrow keys or click; type only in text fields.",
                         classes="hint",
                     )
                     yield Label("Microphone")
@@ -423,8 +423,7 @@ class JervisInstaller(App[int]):
             + platform.release()
             + "  ·  "
             + platform.machine()
-            + "  ·  Python "
-            + platform.python_version()
+            + "  ·  bundled runtime"
         )
 
     def _render_stepbar(self) -> None:
@@ -775,15 +774,11 @@ class JervisInstaller(App[int]):
         self.query_one("#finish-button", Button).display = True
 
 
-def _console_yes_no(message: str) -> bool:
-    value = input(message + " [Y/n]: ").strip().lower()
-    return value not in {"n", "no"}
-
-
 def _prepare_host_before_tui() -> None:
-    # Device selection happens inside the TUI. On fresh Linux systems PortAudio
-    # must exist before Textual constructs the device pickers.
-    ensure_linux_audio(_console_yes_no)
+    # Fresh-machine setup is intentionally non-interactive before Textual starts.
+    # Linux prerequisites are provisioned automatically so the installer never
+    # falls back to a plain stdin [Y/n] prompt.
+    ensure_linux_audio(lambda _message: True)
 
 
 def install() -> int:
