@@ -8,16 +8,6 @@ import numpy as np
 from .models import ConfidenceBand, SpeakerMatch
 
 
-def cosine(left, right) -> float:
-    a = np.asarray(left, dtype=np.float32)
-    b = np.asarray(right, dtype=np.float32)
-    if a.size != b.size or not a.size:
-        return -1.0
-    a = a / (np.linalg.norm(a) + 1e-9)
-    b = b / (np.linalg.norm(b) + 1e-9)
-    return float(np.dot(a, b))
-
-
 class SherpaBackend:
     def __init__(self, model_path: Path | None) -> None:
         self.model_path = model_path
@@ -61,7 +51,7 @@ class SherpaBackend:
             daemon=True,
         ).start()
 
-    def embed(self, samples, sample_rate: int) -> list[float]:
+    def embed(self, samples, sample_rate: int) -> np.ndarray:
         extractor = self._load()
         stream = extractor.create_stream()
         stream.accept_waveform(
@@ -72,8 +62,7 @@ class SherpaBackend:
         vector = np.asarray(extractor.compute(stream), dtype=np.float32)
         if not vector.size:
             raise RuntimeError("speaker embedding failed")
-        vector = vector / (np.linalg.norm(vector) + 1e-9)
-        return vector.tolist()
+        return vector / (np.linalg.norm(vector) + 1e-9)
 
 
 class SpeakerRecognizer:
@@ -81,9 +70,23 @@ class SpeakerRecognizer:
         self.state = state
         self.config = config
         self.backend = SherpaBackend(model_path)
+        self._matrix_cache: dict[str, np.ndarray] = {}
 
     def prewarm(self) -> None:
         self.backend.prewarm()
+
+    def _matrix(self, user_id: str, embeddings: list[list[float]]) -> np.ndarray:
+        cached = self._matrix_cache.get(user_id)
+        if cached is not None and cached.shape[0] == len(embeddings):
+            return cached
+
+        matrix = np.asarray(embeddings, dtype=np.float32)
+        if matrix.ndim != 2 or not matrix.size:
+            return np.zeros((0, 0), dtype=np.float32)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        matrix = matrix / np.maximum(norms, 1e-9)
+        self._matrix_cache[user_id] = matrix
+        return matrix
 
     def match(self, samples, sample_rate: int, active_user: str | None) -> SpeakerMatch:
         if not self.backend.available:
@@ -118,17 +121,13 @@ class SpeakerRecognizer:
 
         scores: list[tuple[str, float]] = []
         for user_id, embeddings in self.state.embeddings().items():
-            ranked = sorted(
-                (cosine(query, embedding) for embedding in embeddings),
-                reverse=True,
-            )
-            if ranked:
-                scores.append(
-                    (
-                        user_id,
-                        sum(ranked[:3]) / min(3, len(ranked)),
-                    )
-                )
+            matrix = self._matrix(user_id, embeddings)
+            if not matrix.size or matrix.shape[1] != query.size:
+                continue
+            similarities = matrix @ query
+            top = np.sort(similarities)[-3:]
+            if top.size:
+                scores.append((user_id, float(np.mean(top))))
 
         scores.sort(key=lambda item: item[1], reverse=True)
         if not scores:
@@ -181,10 +180,11 @@ class SpeakerRecognizer:
             embedding = self.backend.embed(samples, sample_rate)
             self.state.add_embedding(
                 user_id,
-                embedding,
+                embedding.tolist(),
                 quality,
                 int(self.config.get("max_embeddings_per_user", 12)),
             )
+            self._matrix_cache.pop(user_id, None)
             return True
         except Exception:
             return False

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import collections
 import queue
+import threading
+import time
 from contextlib import AbstractContextManager
 
 import numpy as np
@@ -18,7 +21,8 @@ class DesktopAudio(AbstractContextManager):
         self.output_device = output_device
         self.sample_rate = int(sample_rate)
         self.blocksize = int(blocksize)
-        self.q: queue.Queue[np.ndarray] = queue.Queue(maxsize=64)
+        self._frames: collections.deque[np.ndarray] = collections.deque(maxlen=64)
+        self._ready = threading.Condition()
         self.input_stream = None
 
     def __enter__(self):
@@ -27,17 +31,9 @@ class DesktopAudio(AbstractContextManager):
         def callback(indata, frames, time_info, status) -> None:
             del frames, time_info, status
             frame = np.asarray(indata[:, 0], dtype=np.float32).copy()
-            try:
-                self.q.put_nowait(frame)
-            except queue.Full:
-                try:
-                    self.q.get_nowait()
-                except queue.Empty:
-                    pass
-                try:
-                    self.q.put_nowait(frame)
-                except queue.Full:
-                    pass
+            with self._ready:
+                self._frames.append(frame)
+                self._ready.notify()
 
         self.input_stream = sd.InputStream(
             device=self.input_device,
@@ -51,14 +47,18 @@ class DesktopAudio(AbstractContextManager):
         return self
 
     def read(self, timeout: float = 2.0) -> np.ndarray:
-        return self.q.get(timeout=timeout)
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        with self._ready:
+            while not self._frames:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise queue.Empty
+                self._ready.wait(remaining)
+            return self._frames.popleft()
 
     def flush(self) -> None:
-        while True:
-            try:
-                self.q.get_nowait()
-            except queue.Empty:
-                break
+        with self._ready:
+            self._frames.clear()
 
     def __exit__(self, *args):
         if self.input_stream is not None:

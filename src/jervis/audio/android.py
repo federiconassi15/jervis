@@ -26,6 +26,7 @@ class AndroidAudioSource(AbstractContextManager):
         self.adb_path = Path(adb_path) if adb_path else find_adb()
         self.sock: socket.socket | None = None
         self.port: int | None = None
+        self._resample_axes: dict[int, tuple[np.ndarray, np.ndarray]] = {}
 
     def adb(self, *args: str, check: bool = True):
         if self.adb_path is None:
@@ -93,11 +94,14 @@ class AndroidAudioSource(AbstractContextManager):
             1,
             round(len(source) * self.target_rate / self.SOURCE_RATE),
         )
-        return np.interp(
-            np.linspace(0, 1, count, endpoint=False),
-            np.linspace(0, 1, len(source), endpoint=False),
-            source,
-        ).astype(np.float32)
+        axes = self._resample_axes.get(len(source))
+        if axes is None or len(axes[0]) != count:
+            axes = (
+                np.linspace(0, 1, count, endpoint=False),
+                np.linspace(0, 1, len(source), endpoint=False),
+            )
+            self._resample_axes[len(source)] = axes
+        return np.interp(axes[0], axes[1], source).astype(np.float32)
 
     def flush(self) -> None:
         if self.sock is None:

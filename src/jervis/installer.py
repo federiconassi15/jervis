@@ -164,11 +164,17 @@ class JervisInstaller(App[int]):
 
     #nav {
         dock: bottom;
-        height: 3;
+        height: 2;
         padding: 0 1;
         border-top: solid #102a38;
         align: right middle;
         background: #050d14;
+    }
+
+    #nav Button {
+        height: 1;
+        border: none;
+        padding: 0 1;
     }
 
     #nav-hint {
