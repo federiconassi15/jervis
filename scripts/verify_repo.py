@@ -83,7 +83,6 @@ for path in (item for item in tracked if item.suffix == ".md"):
 pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 package_version = str(pyproject["project"]["version"])
 version_text = (ROOT / "src/jervis/version.py").read_text(encoding="utf-8")
-bootstrap_text = (ROOT / "bootstrap.py").read_text(encoding="utf-8")
 version_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', version_text)
 if not version_match:
     ERRORS.append("source version could not be parsed")
