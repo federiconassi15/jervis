@@ -63,6 +63,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_dialogue_rows": 2000,
         "max_event_rows": 5000,
     },
+    "presence": {
+        "enabled": True,
+        "timeout_seconds": 300,
+    },
     "proactive": {
         "enabled": True,
         "quiet_hours_start": "23:00",
@@ -93,6 +97,10 @@ def validate(config) -> None:
     volume = float(config["audio"]["jervis_volume"])
     if not 0.05 <= volume <= 2.0:
         raise ValueError("audio.jervis_volume must be between 0.05 and 2.0")
+
+    presence = config["presence"]
+    if int(presence["timeout_seconds"]) < 30:
+        raise ValueError("presence.timeout_seconds must be at least 30")
 
     identity = config["identity"]
     strong = float(identity["strong_threshold"])
