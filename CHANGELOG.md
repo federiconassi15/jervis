@@ -39,6 +39,7 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 - Retention batching still honors very small configured history limits.
 - Transport telemetry remains compatible with non-OpenClaw test brains.
 - Compact-terminal nav overflow inherited from the 7.1 installer.
+- PyInstaller native binaries now explicitly bundle the compiled Rust extension instead of losing it during freezing.
 
 ## [7.1.1] - 2026-10-01
 
