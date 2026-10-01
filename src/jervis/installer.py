@@ -30,16 +30,12 @@ from .openclaw_setup import configure_mode, find_openclaw
 from .prereqs import ensure_linux_audio, find_adb
 
 BANTER = [
-    "Jervis, make me like Tony Stank.",
-    "Teaching your computer manners.",
-    "No arc reactor required.",
-    "Deploying questionable amounts of intelligence.",
-    "Please do not unplug reality.",
-    "One moment, boss.",
-    "Installing good decisions. Results may vary.",
-    "Turning caffeine into automation.",
-    "Giving your terminal a suspicious amount of personality.",
-    "Arc reactor sold separately.",
+    "Local. Fast. Yours.",
+    "Preparing your assistant.",
+    "OpenClaw connected when you need it.",
+    "Built for the machine in front of you.",
+    "Private state. Explicit permissions.",
+    "Voice, memory, agents — one system.",
 ]
 
 
@@ -49,67 +45,59 @@ class JervisInstaller(App[int]):
 
     CSS = """
     Screen {
-        background: #020812;
-        color: #d9f3ff;
+        background: #02070d;
+        color: #d8eef8;
         overflow: hidden;
     }
 
     #frame {
-        width: 94%;
-        max-width: 112;
+        width: 92%;
+        max-width: 108;
         height: 100%;
         margin: 0 0;
-        border: round #1db6ff;
-        background: #04111f;
-        padding: 0 2;
+        background: #050d14;
+        padding: 0 3;
+    }
+
+    #topline {
+        height: 1;
+        color: #2aa8d8;
+        content-align: center middle;
     }
 
     #hero {
-        height: 4;
+        height: 3;
         content-align: center middle;
-        color: #59d7ff;
+        color: #87e4ff;
         text-style: bold;
     }
 
     #tagline {
         height: 1;
         content-align: center middle;
-        color: #6b91a8;
-        text-style: italic;
+        color: #66889a;
     }
 
     #stepbar {
         height: 2;
         content-align: center middle;
-        color: #4f788e;
-        border-bottom: solid #0b3852;
+        color: #537487;
+        border-bottom: solid #102a38;
     }
 
     #system-line {
         height: 1;
         content-align: center middle;
-        color: #2d91b8;
+        color: #318db0;
+        margin-top: 1;
     }
 
     #context {
-        min-height: 3;
-        border: round #0f4d70;
-        background: #03131f;
-        color: #8ccde8;
+        min-height: 2;
+        background: #07151f;
+        color: #a5d9eb;
         padding: 0 2;
         margin: 1 0;
-    }
-
-    #nav-hint {
-        width: 1fr;
-        color: #527c91;
-        content-align: left middle;
-    }
-
-    #audio-meter {
-        height: 3;
-        color: #75dfff;
-        content-align: center middle;
     }
 
     #pages {
@@ -119,101 +107,123 @@ class JervisInstaller(App[int]):
 
     .page {
         height: 100%;
-        padding: 1 3;
+        padding: 1 2;
     }
 
     .title {
-        height: 3;
-        color: #7de3ff;
+        height: 2;
+        color: #d8f6ff;
         text-style: bold;
     }
 
     .hint {
-        color: #779bad;
+        color: #6f8e9e;
         margin-bottom: 1;
     }
 
     .card {
-        border: round #124d70;
-        background: #061725;
+        background: #07151f;
         padding: 1 2;
         margin: 1 0;
     }
 
     Select, Input {
         margin: 1 0;
-        border: tall #176a96;
-        background: #03101a;
+        background: #06111a;
+        border: tall #173c50;
     }
 
     Select:focus, Input:focus {
-        border: tall #39c9ff;
+        border: tall #49cfff;
+        background: #071824;
+    }
+
+    Switch {
+        margin-left: 2;
     }
 
     Button {
-        margin-right: 1;
         min-width: 14;
+        margin-right: 1;
+        background: #0b1b26;
+        color: #cbefff;
+        border: tall #173c50;
+    }
+
+    Button:hover, Button:focus {
+        background: #0d2d3f;
+        border: tall #49cfff;
+        text-style: bold;
     }
 
     Button.-primary {
-        background: #0879b3;
+        background: #0c658b;
         color: white;
-    }
-
-    Button:focus {
-        text-style: bold;
-        background: #12aee8;
+        border: tall #2abde9;
     }
 
     #nav {
         dock: bottom;
         height: 3;
-        padding: 0 2;
-        border-top: solid #0b3852;
+        padding: 0 1;
+        border-top: solid #102a38;
         align: right middle;
-        background: #04111f;
+        background: #050d14;
+    }
+
+    #nav-hint {
+        width: 1fr;
+        color: #58788a;
+        content-align: left middle;
     }
 
     #pulse {
-        color: #31c8ff;
-        width: 4;
+        width: 3;
+        color: #52d3ff;
         content-align: center middle;
     }
 
+    #audio-meter {
+        height: 2;
+        color: #75dfff;
+        content-align: center middle;
+        background: #06131d;
+        margin: 1 0;
+    }
+
     #progress-status {
-        height: 3;
-        color: #a9ebff;
+        height: 2;
+        color: #c3efff;
         text-style: bold;
         content-align: center middle;
     }
 
     #progress-detail {
         height: 3;
-        color: #7595a5;
+        color: #6f93a5;
         content-align: center top;
     }
 
     ProgressBar {
-        margin: 2 4;
+        margin: 1 4;
     }
 
     #done-mark {
-        height: 5;
+        height: 4;
         content-align: center middle;
-        color: #60ffb5;
+        color: #7df0bd;
         text-style: bold;
     }
 
     #error-mark {
         height: 4;
         content-align: center middle;
-        color: #ff6f91;
+        color: #ff8ca5;
         text-style: bold;
     }
 
     #review {
-        border: round #176a96;
-        background: #03101a;
+        background: #07151f;
         padding: 1 2;
         margin: 1 0;
         height: auto;
@@ -242,7 +252,7 @@ class JervisInstaller(App[int]):
             "J  E  R  V  I  S",
             "J · E · R · V · I · S",
             "J  E  R  V  I  S",
-            "J › E › R › V › I › S",
+            "J  E  R  V  I  S",
         ]
         self.pulse_index = 0
         self.animation_tick = 0
@@ -304,13 +314,14 @@ class JervisInstaller(App[int]):
 
     def compose(self) -> ComposeResult:
         with Container(id="frame"):
+            yield Static("JERVIS 7.1  ·  SETUP", id="topline")
             with Horizontal():
                 yield Static("◐", id="pulse")
                 yield Static(
-                    "J  E  R  V  I  S\nINTELLIGENT SYSTEMS INSTALLER",
+                    "J  E  R  V  I  S\nSETUP",
                     id="hero",
                 )
-            yield Static("“" + self.tagline + "”", id="tagline")
+            yield Static(self.tagline, id="tagline")
             yield Static("", id="stepbar")
             yield Static("SYSTEM CHECK · READY", id="system-line")
             yield Static("", id="context")
@@ -319,8 +330,8 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-mode"):
                     yield Static("Where will Jervis live?", classes="title")
                     yield Static(
-                        "Desktop uses the computer you work on every day. "
-                        "Server is the always-on NUC/home-server style setup.",
+                        "Desktop follows your normal login and audio session. "
+                        "Server is tuned for an always-on machine.",
                         classes="hint",
                     )
                     yield Select(
@@ -340,8 +351,8 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-brain"):
                     yield Static("Connect the OpenClaw brain", classes="title")
                     yield Static(
-                        "Jervis handles OpenClaw installation quietly. "
-                        "You only see OpenClaw directly when it genuinely needs your sign-in.",
+                        "Jervis sets up OpenClaw automatically. "
+                        "You only leave this screen for a required sign-in.",
                         classes="hint",
                     )
                     yield Static(
@@ -371,7 +382,7 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-audio"):
                     yield Static("Choose how Jervis hears and speaks", classes="title")
                     yield Static(
-                        "Use the detected devices below. Navigate with the arrow keys or click; type only in text fields.",
+                        "Pick the microphone and output Jervis should own.",
                         classes="hint",
                     )
                     yield Label("Microphone")
@@ -399,7 +410,7 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-identity"):
                     yield Static("Create the owner profile", classes="title")
                     yield Static(
-                        "This stays local. Jervis asks how to address people instead of guessing gender.",
+                        "Your local owner profile controls identity, permissions, and authentication.",
                         classes="hint",
                     )
                     yield Input(placeholder="Your name", id="owner-name")
@@ -462,35 +473,33 @@ class JervisInstaller(App[int]):
         self.query_one("#pulse", Static).update(self.pulse_frames[self.pulse_index])
 
         hero = self.hero_frames[(self.animation_tick // 2) % len(self.hero_frames)]
-        self.query_one("#hero", Static).update(
-            hero + "\nINTELLIGENT SYSTEMS INSTALLER"
-        )
+        self.query_one("#hero", Static).update(hero + "\nSETUP")
 
         scan = self.scan_frames[self.animation_tick % len(self.scan_frames)]
         if self.transition_ticks > 0:
             self.transition_ticks -= 1
             self.query_one("#system-line", Static).update(
-                scan + " SYNCHRONIZING INTERFACE " + scan
+                scan + "  switching view"
             )
         elif self.step == 5 and not self.core_installed:
             self.query_one("#system-line", Static).update(
-                scan + " BUILD SEQUENCE ACTIVE " + scan
+                scan + "  installing"
             )
             self.query_one("#progress-status", Static).update(
                 scan + "  " + self.progress_title
             )
         elif self.core_installed:
             self.query_one("#system-line", Static).update(
-                "● CORE ONLINE · INSTALL VERIFIED"
+                "●  installed and verified"
             )
         else:
             self.query_one("#system-line", Static).update(
-                scan + " SYSTEM CHECK · READY " + scan
+                scan + "  ready"
             )
 
         if self.animation_tick % 80 == 0 and self.step < 5:
             self.tagline = random.choice(BANTER)
-            self.query_one("#tagline", Static).update("“" + self.tagline + "”")
+            self.query_one("#tagline", Static).update(self.tagline)
 
     def _platform_summary(self) -> str:
         return (
@@ -509,9 +518,9 @@ class JervisInstaller(App[int]):
         if self.step == 0:
             mode = str(self.query_one("#mode", Select).value)
             text = (
-                "DESKTOP PROFILE  ·  interactive audio session · normal login startup"
+                "Desktop  ·  current-user audio  ·  starts with your login"
                 if mode == "desktop"
-                else "SERVER PROFILE  ·  persistent startup · explicit always-on hardware"
+                else "Server  ·  persistent startup  ·  always-on hardware"
             )
         elif self.step == 1:
             auth = str(self.query_one("#openclaw-auth", Select).value)
@@ -521,27 +530,27 @@ class JervisInstaller(App[int]):
                 "full": "Full OpenClaw onboarding · alternate providers supported",
                 "later": "Brain setup deferred · local Jervis remains usable",
             }
-            text = "BRAIN LINK  ·  " + labels.get(auth, "select an authentication mode")
+            text = "Brain  ·  " + labels.get(auth, "select an authentication mode")
         elif self.step == 2:
             mic = self.query_one("#microphone", Select).value
             out = self.query_one("#output", Select).value
             mic_text = "waiting for microphone" if mic is Select.NULL else str(mic)
             out_text = "waiting for output" if out is Select.NULL else "output #" + str(out)
-            text = "AUDIO ROUTE  ·  " + mic_text + "  →  " + out_text
+            text = "Audio  ·  " + mic_text + "  →  " + out_text
         elif self.step == 3:
             name = self.query_one("#owner-name", Input).value.strip() or "owner not named yet"
             honorific = str(self.query_one("#honorific", Select).value)
             text = (
-                "LOCAL IDENTITY  ·  "
+                "Identity  ·  "
                 + name
                 + " · address as "
                 + ("ma'am" if honorific == "maam" else "sir")
                 + " · passphrase encrypted locally"
             )
         elif self.step == 4:
-            text = "FINAL CHECK  ·  review every choice before transactional activation"
+            text = "Review  ·  nothing is changed until you start installation"
         else:
-            text = "INSTALL CORE  ·  staged changes · health checks · automatic rollback on failure"
+            text = "Install  ·  staged changes  ·  verification  ·  automatic rollback"
 
         try:
             self.query_one("#context", Static).update(text)
@@ -554,9 +563,9 @@ class JervisInstaller(App[int]):
             if index < self.step:
                 parts.append("✓ " + name)
             elif index == self.step:
-                parts.append("● " + name)
+                parts.append("[" + name.upper() + "]")
             else:
-                parts.append("○ " + name)
+                parts.append("· " + name)
         self.query_one("#stepbar", Static).update("   ".join(parts))
 
     def _switch(self, step: int) -> None:
@@ -653,14 +662,14 @@ class JervisInstaller(App[int]):
             "later": "Configure later",
         }[self.plan.openclaw_auth]
         lines = [
-            "[b]Mode[/b]           " + self.plan.mode.title(),
-            "[b]Brain[/b]          " + brain,
-            "[b]Microphone[/b]     " + microphone,
-            "[b]Output[/b]         Device #" + str(self.plan.output_device),
-            "[b]Start at boot[/b]  " + ("Yes" if self.plan.start_at_boot else "No"),
-            "[b]Owner[/b]          " + self.plan.owner_name,
-            "[b]Address as[/b]     " + ("Ma'am" if self.plan.honorific == "maam" else "Sir"),
-            "[b]Passphrase[/b]     ••••••••••••",
+            "✓  [b]Mode[/b]          " + self.plan.mode.title(),
+            "✓  [b]Brain[/b]         " + brain,
+            "✓  [b]Microphone[/b]    " + microphone,
+            "✓  [b]Output[/b]        Device #" + str(self.plan.output_device),
+            "✓  [b]Startup[/b]       " + ("Automatic" if self.plan.start_at_boot else "Manual"),
+            "✓  [b]Owner[/b]         " + self.plan.owner_name,
+            "✓  [b]Address as[/b]    " + ("Ma'am" if self.plan.honorific == "maam" else "Sir"),
+            "✓  [b]Authentication[/b] Local passphrase configured",
         ]
         self.query_one("#review", Static).update("\n".join(lines))
 
@@ -717,7 +726,9 @@ class JervisInstaller(App[int]):
             tone = (0.12 * np.sin(2 * np.pi * 440 * timeline)).astype(np.float32)
             sd.play(tone, samplerate=rate, device=int(value))
             sd.wait()
-            self.call_from_thread(self.notify, "Speaker test complete.", title="Audio")
+            self.call_from_thread(
+                self._speaker_test_complete,
+            )
         except Exception as exc:
             self.call_from_thread(
                 self.notify,
@@ -725,6 +736,12 @@ class JervisInstaller(App[int]):
                 title="Speaker test failed",
                 severity="error",
             )
+
+    def _speaker_test_complete(self) -> None:
+        self.query_one("#audio-meter", Static).update(
+            "OUTPUT TEST  ·  ✓ tone played successfully"
+        )
+        self.notify("Output test passed.", title="Audio")
 
     @on(Button.Pressed, "#test-mic")
     def test_mic_pressed(self) -> None:
@@ -979,7 +996,7 @@ class JervisInstaller(App[int]):
         self.query_one("#auth-button", Button).display = False
         self.query_one("#progress-status", Static).update("Installation complete")
         self.query_one("#done-mark", Static).update(
-            "✓ JERVIS 7.1 IS ONLINE\nRun  jervis doctor  any time for a health check."
+            "✓  JERVIS 7.1 READY\nVoice · identity · memory · OpenClaw"
         )
         self.query_one("#finish-button", Button).display = True
 
