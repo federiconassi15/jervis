@@ -3,8 +3,10 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v7.1.*"
+    branches:
+      - main
+    paths:
+      - ".release-trigger"
 
 permissions:
   contents: write
@@ -14,23 +16,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      - name: Read Jervis version
+        id: meta
+        shell: python
+        run: |
+          import pathlib
+          import re
+          import os
+
+          text = pathlib.Path("src/jervis/version.py").read_text(encoding="utf-8")
+          match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
+          if not match:
+              raise SystemExit("Could not read Jervis version")
+          version = match.group(1)
+          if not re.fullmatch(r"7\.1\.\d+", version):
+              raise SystemExit("Release workflow only publishes 7.1.x")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("version=" + version + "\n")
+
       - name: Build package and universal installer
         run: |
           python -m pip install --upgrade build
           python -m build
           python scripts/build_release.py
           python scripts/verify_release.py
+
       - name: Generate release checksums
         run: |
           cd dist
           sha256sum jervis-installer.pyz *.whl *.tar.gz > SHA256SUMS
-      - name: Upload release
-        if: startsWith(github.ref, 'refs/tags/')
+
+      - name: Publish stable release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: Jervis ${{ steps.meta.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: false
+          draft: false
           generate_release_notes: true
           files: |
             dist/*.whl
