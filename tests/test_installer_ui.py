@@ -1,5 +1,6 @@
 import asyncio
 
+import jervis.installer as installer_module
 from jervis.install_plan import InstallPlan
 from jervis.installer import JervisInstaller, install
 
@@ -36,3 +37,47 @@ def test_installer_tui_mounts_and_mouse_navigates():
             assert app.query_one("#openclaw-auth") is not None
 
     asyncio.run(scenario())
+
+
+def test_installer_exit_code_propagates(monkeypatch):
+    monkeypatch.setattr(installer_module, "ensure_linux_audio", lambda prompt: None)
+    monkeypatch.setattr(JervisInstaller, "run", lambda self, mouse=True: 0)
+    assert install() == 0
+
+    monkeypatch.setattr(JervisInstaller, "run", lambda self, mouse=True: 130)
+    assert install() == 130
+
+    monkeypatch.setattr(JervisInstaller, "run", lambda self, mouse=True: None)
+    assert install() == 130
+
+
+def test_quit_is_success_after_core_install(monkeypatch):
+    app = JervisInstaller()
+    results = []
+    monkeypatch.setattr(app, "exit", lambda result=None: results.append(result))
+
+    app.core_installed = False
+    app.action_quit()
+    assert results[-1] == 130
+
+    app.core_installed = True
+    app.action_quit()
+    assert results[-1] == 0
+
+
+def test_linux_prerequisites_run_before_tui(monkeypatch):
+    order = []
+
+    monkeypatch.setattr(
+        installer_module,
+        "ensure_linux_audio",
+        lambda prompt: order.append("prerequisites"),
+    )
+    monkeypatch.setattr(
+        JervisInstaller,
+        "run",
+        lambda self, mouse=True: order.append("tui") or 0,
+    )
+
+    assert install() == 0
+    assert order == ["prerequisites", "tui"]

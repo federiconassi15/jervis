@@ -72,6 +72,34 @@ def _configure_owner(paths: Paths, config: dict, plan: InstallPlan) -> None:
         state.close()
 
 
+def _reconcile_startup(
+    adapter,
+    transaction: InstallTransaction,
+    launcher: Path,
+    env: dict[str, str],
+    new_mode: str,
+    start_at_boot: bool,
+    previous_mode: str,
+) -> None:
+    installed = bool(adapter.service_installed())
+
+    def restore_previous() -> None:
+        adapter.install_service(launcher, env, mode=previous_mode)
+
+    if start_at_boot:
+        if installed:
+            transaction.mark_service_changed(restore_previous)
+            adapter.remove_service()
+        else:
+            transaction.mark_service_changed()
+        adapter.install_service(launcher, env, mode=new_mode)
+        return
+
+    if installed:
+        transaction.mark_service_changed(restore_previous)
+        adapter.remove_service()
+
+
 def run_install(
     plan: InstallPlan,
     launcher: Path,
@@ -134,6 +162,8 @@ def run_install(
     else:
         config = json.loads(json.dumps(DEFAULT_CONFIG))
 
+    previous_mode = str(config["install"].get("mode", "desktop"))
+
     config["install"]["mode"] = plan.mode
     config["install"]["start_at_boot"] = bool(plan.start_at_boot)
     config["audio"]["source"] = {
@@ -157,22 +187,19 @@ def run_install(
         _configure_owner(paths, config, plan)
 
         _emit(progress, 7, "Startup integration", "Connecting Jervis to the operating system")
-        if plan.start_at_boot:
-            active = False
-            try:
-                active = bool(adapter.service_health().ok)
-            except Exception:
-                active = False
-            if not active:
-                adapter.install_service(
-                    launcher,
-                    {
-                        "JERVIS_HOME": str(paths.root),
-                        "JERVIS_LOG_HOME": str(paths.logs),
-                    },
-                    mode=plan.mode,
-                )
-                transaction.mark_service_changed()
+        service_env = {
+            "JERVIS_HOME": str(paths.root),
+            "JERVIS_LOG_HOME": str(paths.logs),
+        }
+        _reconcile_startup(
+            adapter,
+            transaction,
+            launcher,
+            service_env,
+            plan.mode,
+            bool(plan.start_at_boot),
+            previous_mode,
+        )
 
         _emit(progress, 8, "Final checks", "Verifying configuration and OpenClaw health")
         load(config_path)

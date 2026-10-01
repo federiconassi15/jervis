@@ -140,10 +140,12 @@ def main() -> None:
     except KeyboardInterrupt:
         print()
         print("Jervis setup cancelled.")
+        raise SystemExit(130)
     except Exception as exc:
         print()
         print(paint("  ✕  Jervis could not start", RED))
         print("  " + str(exc))
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

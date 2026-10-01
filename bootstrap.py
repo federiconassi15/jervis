@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -13,7 +14,6 @@ import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 
-VERSION = "7.1.1"
 MINIMUM_PYTHON = (3, 11)
 BLUE = "\033[38;5;45m"
 GREEN = "\033[38;5;82m"
@@ -44,6 +44,18 @@ def source_tree():
             yield Path(directory)
         return
     yield Path(__file__).resolve().parent
+
+
+def source_version(source: Path) -> str:
+    path = source / "src" / "jervis" / "version.py"
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
+    if not match:
+        raise RuntimeError("The bundled Jervis version could not be read.")
+    version = match.group(1)
+    if not re.fullmatch(r"7\.1\.\d+", version):
+        raise RuntimeError("This installer only accepts Jervis 7.1.x packages.")
+    return version
 
 
 def venv_python(root: Path) -> Path:
@@ -121,28 +133,29 @@ def main() -> None:
     if sys.version_info < MINIMUM_PYTHON:
         raise SystemExit("Jervis requires Python 3.11 or newer.")
 
-    root = install_root()
-    versions = root / "versions"
-    logs = root / "logs"
-    versions.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    candidate = versions / (VERSION + "-" + stamp + "-" + str(os.getpid()))
-    log_path = logs / ("installer-" + stamp + ".log")
-    launcher = stable_launcher(root)
-    current = root / "CURRENT"
+    with source_tree() as source:
+        version = source_version(source)
+        root = install_root()
+        versions = root / "versions"
+        logs = root / "logs"
+        versions.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        candidate = versions / (version + "-" + stamp + "-" + str(os.getpid()))
+        log_path = logs / ("installer-" + stamp + ".log")
+        launcher = stable_launcher(root)
+        current = root / "CURRENT"
 
-    old_launcher = launcher.read_bytes() if launcher.exists() else None
-    old_current = current.read_bytes() if current.exists() else None
+        old_launcher = launcher.read_bytes() if launcher.exists() else None
+        old_current = current.read_bytes() if current.exists() else None
 
-    try:
-        print()
-        print(paint("  J E R V I S  ·  " + VERSION, BLUE))
-        print()
+        try:
+            print()
+            print(paint("  J E R V I S  ·  " + version, BLUE))
+            print()
 
-        with Spinner("Preparing the installer"):
-            venv.EnvBuilder(with_pip=True, clear=False).create(candidate)
-            python = venv_python(candidate)
-            with source_tree() as source:
+            with Spinner("Preparing the installer"):
+                venv.EnvBuilder(with_pip=True, clear=False).create(candidate)
+                python = venv_python(candidate)
                 run_logged(
                     [
                         str(python),
@@ -171,59 +184,59 @@ def main() -> None:
                     log_path,
                 )
 
-        with Spinner("Verifying Jervis"):
-            run_logged(
-                [
-                    str(python),
-                    "-c",
-                    "import jervis; assert jervis.__version__ == '" + VERSION + "'",
-                ],
-                log_path,
-            )
+            with Spinner("Verifying Jervis"):
+                run_logged(
+                    [
+                        str(python),
+                        "-c",
+                        "import jervis; assert jervis.__version__ == '" + version + "'",
+                    ],
+                    log_path,
+                )
 
-        launcher.parent.mkdir(parents=True, exist_ok=True)
-        temp_launcher = launcher.with_suffix(launcher.suffix + ".tmp")
-        temp_launcher.write_bytes(launcher_bytes(python))
-        if os.name != "nt":
-            temp_launcher.chmod(0o755)
-        temp_launcher.replace(launcher)
-        current.write_text(candidate.name + "\n", encoding="utf-8")
-
-        env = os.environ.copy()
-        env["JERVIS_INSTALL_ROOT"] = str(root)
-        env["JERVIS_LAUNCHER_PATH"] = str(launcher)
-        env["JERVIS_INSTALL_LOG"] = str(log_path)
-
-        proc = subprocess.run(
-            [str(python), "-m", "jervis.cli", "install"],
-            env=env,
-            check=False,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError("Jervis setup did not finish. Details: " + str(log_path))
-
-    except KeyboardInterrupt:
-        print()
-        print("Jervis setup cancelled.")
-        shutil.rmtree(candidate, ignore_errors=True)
-        return
-    except Exception as exc:
-        launcher.parent.mkdir(parents=True, exist_ok=True)
-        if old_launcher is None:
-            launcher.unlink(missing_ok=True)
-        else:
-            launcher.write_bytes(old_launcher)
+            launcher.parent.mkdir(parents=True, exist_ok=True)
+            temp_launcher = launcher.with_suffix(launcher.suffix + ".tmp")
+            temp_launcher.write_bytes(launcher_bytes(python))
             if os.name != "nt":
-                launcher.chmod(0o755)
-        if old_current is None:
-            current.unlink(missing_ok=True)
-        else:
-            current.write_bytes(old_current)
-        shutil.rmtree(candidate, ignore_errors=True)
-        print()
-        print(paint("  ✕  Jervis setup stopped safely", RED))
-        print("  " + str(exc))
-        return
+                temp_launcher.chmod(0o755)
+            temp_launcher.replace(launcher)
+            current.write_text(candidate.name + "\n", encoding="utf-8")
+
+            env = os.environ.copy()
+            env["JERVIS_INSTALL_ROOT"] = str(root)
+            env["JERVIS_LAUNCHER_PATH"] = str(launcher)
+            env["JERVIS_INSTALL_LOG"] = str(log_path)
+
+            proc = subprocess.run(
+                [str(python), "-m", "jervis.cli", "install"],
+                env=env,
+                check=False,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError("Jervis setup did not finish. Details: " + str(log_path))
+
+        except KeyboardInterrupt:
+            print()
+            print("Jervis setup cancelled.")
+            shutil.rmtree(candidate, ignore_errors=True)
+            raise SystemExit(130)
+        except Exception as exc:
+            launcher.parent.mkdir(parents=True, exist_ok=True)
+            if old_launcher is None:
+                launcher.unlink(missing_ok=True)
+            else:
+                launcher.write_bytes(old_launcher)
+                if os.name != "nt":
+                    launcher.chmod(0o755)
+            if old_current is None:
+                current.unlink(missing_ok=True)
+            else:
+                current.write_bytes(old_current)
+            shutil.rmtree(candidate, ignore_errors=True)
+            print()
+            print(paint("  ✕  Jervis setup stopped safely", RED))
+            print("  " + str(exc))
+            raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

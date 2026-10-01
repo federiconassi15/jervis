@@ -27,7 +27,7 @@ from .audio.devices import default_devices, list_devices
 from .install_engine import TOTAL_STEPS, run_install
 from .install_plan import InstallOutcome, InstallPlan
 from .openclaw_setup import configure_mode, find_openclaw
-from .prereqs import find_adb
+from .prereqs import ensure_linux_audio, find_adb
 
 BANTER = [
     "Jervis, make me like Tony Stank.",
@@ -43,7 +43,7 @@ BANTER = [
 ]
 
 
-class JervisInstaller(App[None]):
+class JervisInstaller(App[int]):
     TITLE = "Jervis Installer"
     SUB_TITLE = "7.1"
 
@@ -207,6 +207,7 @@ class JervisInstaller(App[None]):
         self.step = 0
         self.plan = InstallPlan()
         self.outcome: InstallOutcome | None = None
+        self.core_installed = False
         self.tagline = random.choice(BANTER)
         self.pulse_frames = ["◐", "◓", "◑", "◒"]
         self.pulse_index = 0
@@ -638,16 +639,26 @@ class JervisInstaller(App[None]):
             self.query_one("#error-mark", Static).update(
                 "OpenClaw sign-in did not finish\n" + str(exc)
             )
+            self.query_one("#progress-status", Static).update(
+                "Jervis is installed. OpenClaw sign-in can be retried later."
+            )
+            self.query_one("#progress-detail", Static).update(
+                "Retry here, or finish now and configure OpenClaw from its CLI later."
+            )
+            self.query_one("#finish-button", Button).display = True
             return
         self._show_done()
 
     @on(Button.Pressed, "#finish-button")
     def finish_pressed(self) -> None:
-        self.exit()
+        self.exit(0)
 
     def action_back(self) -> None:
         if 0 < self.step < 5:
             self._switch(self.step - 1)
+
+    def action_quit(self) -> None:
+        self.exit(0 if self.core_installed else 130)
 
     def action_previous_control(self) -> None:
         self.screen.focus_previous()
@@ -733,6 +744,7 @@ class JervisInstaller(App[None]):
 
     def _install_complete(self, outcome: InstallOutcome) -> None:
         self.outcome = outcome
+        self.core_installed = True
         self.query_one(LoadingIndicator).display = False
         self.query_one("#progress", ProgressBar).update(
             total=TOTAL_STEPS,
@@ -763,18 +775,32 @@ class JervisInstaller(App[None]):
         self.query_one("#finish-button", Button).display = True
 
 
-def install() -> None:
-    """Launch the full-screen Jervis installer."""
-    JervisInstaller().run(mouse=True)
+def _console_yes_no(message: str) -> bool:
+    value = input(message + " [Y/n]: ").strip().lower()
+    return value not in {"n", "no"}
+
+
+def _prepare_host_before_tui() -> None:
+    # Device selection happens inside the TUI. On fresh Linux systems PortAudio
+    # must exist before Textual constructs the device pickers.
+    ensure_linux_audio(_console_yes_no)
+
+
+def install() -> int:
+    """Prepare host prerequisites, launch the TUI, and return a process exit code."""
+    try:
+        _prepare_host_before_tui()
+        result = JervisInstaller().run(mouse=True)
+    except KeyboardInterrupt:
+        return 130
+    except Exception as exc:
+        print("Jervis installer could not start: " + str(exc))
+        return 1
+    return 130 if result is None else int(result)
 
 
 def main() -> None:
-    try:
-        install()
-    except KeyboardInterrupt:
-        return
-    except Exception as exc:
-        print("Jervis installer could not start: " + str(exc))
+    raise SystemExit(install())
 
 
 if __name__ == "__main__":

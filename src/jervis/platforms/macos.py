@@ -91,6 +91,9 @@ class MacOSPlatform(PlatformAdapter):
         )
         self.agent_plist().unlink(missing_ok=True)
 
+    def service_installed(self) -> bool:
+        return self.agent_plist().is_file()
+
     def service_health(self) -> Health:
         target = self._domain() + "/" + self.label
         proc = self._launchctl("print", target)

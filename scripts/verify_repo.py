@@ -85,13 +85,15 @@ package_version = str(pyproject["project"]["version"])
 version_text = (ROOT / "src/jervis/version.py").read_text(encoding="utf-8")
 bootstrap_text = (ROOT / "bootstrap.py").read_text(encoding="utf-8")
 version_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', version_text)
-bootstrap_match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', bootstrap_text)
-if not version_match or not bootstrap_match:
-    ERRORS.append("version constants could not be parsed")
+if not version_match:
+    ERRORS.append("source version could not be parsed")
 else:
-    versions = {package_version, version_match.group(1), bootstrap_match.group(1)}
+    versions = {package_version, version_match.group(1)}
     if len(versions) != 1:
         ERRORS.append("version mismatch: " + repr(sorted(versions)))
+
+if "def source_version(" not in bootstrap_text:
+    ERRORS.append("bootstrap must derive its patch version from packaged source")
 
 wiki_dir = ROOT / "docs" / "wiki"
 if wiki_dir.exists():

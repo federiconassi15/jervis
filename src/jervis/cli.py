@@ -14,6 +14,6 @@ def main(argv=None):
     elif command=="tui":run_tui()
     elif command=="doctor":
         report=run_doctor();print(report.render());raise SystemExit(0 if report.ok else 1)
-    elif command=="install":install()
+    elif command=="install":raise SystemExit(install())
     elif command=="update-check":print(json.dumps(asdict(check_update()),indent=2))
 if __name__=="__main__":main()

@@ -113,6 +113,9 @@ class LinuxPlatform(PlatformAdapter):
         self.unit().unlink(missing_ok=True)
         self._systemctl("daemon-reload")
 
+    def service_installed(self) -> bool:
+        return self.unit().is_file()
+
     def service_health(self) -> Health:
         proc = self._systemctl("is-active", self.unit_name)
         detail = proc.stdout.strip() or proc.stderr.strip() or "inactive"

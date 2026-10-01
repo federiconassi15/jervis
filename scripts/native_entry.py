@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 
@@ -30,19 +31,54 @@ def same_file(left: Path, right: Path) -> bool:
         return left.resolve() == right.resolve()
 
 
-def install_native_copy() -> Path:
-    source = Path(sys.executable).resolve()
-    target = stable_binary()
-    if same_file(source, target):
-        return target
-
+def install_native_copy(source: Path, target: Path) -> Path | None:
+    """Install source at target and return a rollback backup when one existed."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(target.name + ".new")
-    shutil.copy2(source, temporary)
+    backup: Path | None = None
+    if target.exists():
+        backup = target.with_name(
+            target.name + ".previous-" + str(os.getpid()) + "-" + str(int(time.time()))
+        )
+        shutil.copy2(target, backup)
+
+    temporary = target.with_name(target.name + ".new-" + str(os.getpid()))
+    try:
+        shutil.copy2(source, temporary)
+        if os.name != "nt":
+            temporary.chmod(0o755)
+        os.replace(temporary, target)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        if backup is not None:
+            backup.unlink(missing_ok=True)
+        raise
+    return backup
+
+
+def rollback_native_copy(target: Path, backup: Path | None) -> None:
+    """Restore the previous native launcher, or remove a failed first install."""
+    if backup is None:
+        target.unlink(missing_ok=True)
+        return
+    temporary = target.with_name(target.name + ".rollback-" + str(os.getpid()))
+    shutil.copy2(backup, temporary)
     if os.name != "nt":
         temporary.chmod(0o755)
     os.replace(temporary, target)
-    return target
+    backup.unlink(missing_ok=True)
+
+
+def commit_native_copy(backup: Path | None) -> None:
+    if backup is not None:
+        backup.unlink(missing_ok=True)
+
+
+def _exit_code(exc: SystemExit) -> int:
+    if exc.code is None:
+        return 0
+    if isinstance(exc.code, int):
+        return exc.code
+    return 1
 
 
 def main() -> None:
@@ -61,16 +97,28 @@ def main() -> None:
     target = stable_binary()
     already_installed = same_file(source, target)
 
-    if not already_installed:
-        target = install_native_copy()
-        os.environ["JERVIS_LAUNCHER_PATH"] = str(target)
-        os.environ["JERVIS_INSTALL_ROOT"] = str(install_root())
-        cli_main(args or ["install"])
+    if already_installed:
+        os.environ.setdefault("JERVIS_LAUNCHER_PATH", str(target))
+        os.environ.setdefault("JERVIS_INSTALL_ROOT", str(install_root()))
+        cli_main(args)
         return
 
-    os.environ.setdefault("JERVIS_LAUNCHER_PATH", str(target))
-    os.environ.setdefault("JERVIS_INSTALL_ROOT", str(install_root()))
-    cli_main(args)
+    backup = install_native_copy(source, target)
+    os.environ["JERVIS_LAUNCHER_PATH"] = str(target)
+    os.environ["JERVIS_INSTALL_ROOT"] = str(install_root())
+    try:
+        cli_main(args or ["install"])
+    except SystemExit as exc:
+        if _exit_code(exc) == 0:
+            commit_native_copy(backup)
+        else:
+            rollback_native_copy(target, backup)
+        raise
+    except BaseException:
+        rollback_native_copy(target, backup)
+        raise
+    else:
+        commit_native_copy(backup)
 
 
 if __name__ == "__main__":

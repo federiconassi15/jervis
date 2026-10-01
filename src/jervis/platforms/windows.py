@@ -106,6 +106,15 @@ class WindowsPlatform(PlatformAdapter):
         if install_root:
             (Path(install_root) / "bin" / "jervis-service.cmd").unlink(missing_ok=True)
 
+    def service_installed(self) -> bool:
+        script = (
+            "$task=Get-ScheduledTask -TaskName "
+            + _ps_quote(self.task_name)
+            + " -ErrorAction SilentlyContinue;"
+            "if($null -eq $task){exit 3};exit 0"
+        )
+        return self._powershell(script).returncode == 0
+
     def service_health(self) -> Health:
         script = (
             "$task=Get-ScheduledTask -TaskName "

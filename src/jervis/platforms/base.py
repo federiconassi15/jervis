@@ -39,6 +39,13 @@ class PlatformAdapter(ABC):
     def service_health(self) -> Health:
         raise NotImplementedError
 
+    def service_installed(self) -> bool:
+        """Return whether a managed startup definition exists, active or not."""
+        try:
+            return bool(self.service_health().ok)
+        except Exception:
+            return False
+
     @abstractmethod
     def start_service(self) -> None:
         raise NotImplementedError

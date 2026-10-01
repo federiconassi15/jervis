@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -30,18 +31,29 @@ with zipfile.ZipFile(ARCHIVE) as bundle:
     if missing:
         raise SystemExit("release verification failed: missing " + ", ".join(missing))
     version_text = bundle.read("src/jervis/version.py").decode("utf-8")
+    pyproject = tomllib.loads(bundle.read("pyproject.toml").decode("utf-8"))
     bootstrap_text = bundle.read("bootstrap.py").decode("utf-8")
 
 version_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', version_text)
-bootstrap_match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', bootstrap_text)
-if not version_match or not bootstrap_match:
-    raise SystemExit("release verification failed: version constants are unreadable")
-if version_match.group(1) != bootstrap_match.group(1):
-    raise SystemExit("release verification failed: bootstrap/package versions differ")
+if not version_match:
+    raise SystemExit("release verification failed: source version is unreadable")
+
+version = version_match.group(1)
+project_version = str(pyproject.get("project", {}).get("version", ""))
+if project_version != version:
+    raise SystemExit(
+        "release verification failed: pyproject/source versions differ: "
+        + project_version
+        + " vs "
+        + version
+    )
+
+if "def source_version(" not in bootstrap_text:
+    raise SystemExit("release verification failed: bootstrap does not derive source version")
 
 digest = hashlib.sha256(ARCHIVE.read_bytes()).hexdigest()
 expected_digest = CHECKSUM.read_text(encoding="utf-8").split()[0]
 if digest != expected_digest:
     raise SystemExit("release verification failed: installer checksum mismatch")
 
-print("release verification PASS: Jervis " + version_match.group(1))
+print("release verification PASS: Jervis " + version)
