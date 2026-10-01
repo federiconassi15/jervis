@@ -4,9 +4,13 @@ import curses
 import secrets
 import time
 
+from .agents import openclaw_agents
 from .config import load, save
+from .openclaw_setup import find_openclaw
 from .paths import Paths
+from .permissions import describe_role
 from .security import verify_passphrase
+from .skills import SkillManager
 from .state import State
 from .version import __version__
 
@@ -117,6 +121,11 @@ def run() -> None:
     state = State(paths.data / "jervis.sqlite3")
     config_path = paths.config / "config.json"
 
+    skills = SkillManager([paths.data / "skills", paths.root / "skills"])
+    skill_cache = skills.discover()
+    agent_cache = openclaw_agents()
+    openclaw_path = find_openclaw()
+
     def app(screen) -> None:
         curses.curs_set(0)
         screen.nodelay(True)
@@ -193,6 +202,70 @@ def run() -> None:
                     )
                 except Exception as exc:
                     safe(screen, 5, 2, "Audio config error: " + str(exc))
+            elif name == "BRAIN":
+                try:
+                    config = load(config_path)
+                    safe(screen, 5, 2, "Provider: " + str(config["brain"]["provider"]))
+                    safe(screen, 6, 2, "Agent: " + str(config["brain"]["agent"]))
+                    safe(screen, 7, 2, "Thinking: " + str(config["brain"]["thinking"]))
+                    safe(screen, 8, 2, "OpenClaw: " + (str(openclaw_path) if openclaw_path else "not found"))
+                    safe(screen, 9, 2, "Last route: " + str(state.get_kv("brain.last_route", "none yet")))
+                except Exception as exc:
+                    safe(screen, 5, 2, "Brain config error: " + str(exc))
+            elif name == "SKILLS":
+                if not skill_cache:
+                    safe(screen, 5, 2, "No user skills discovered.")
+                    safe(screen, 6, 2, "Install skills under the Jervis data skills directory.")
+                for index, skill in enumerate(list(skill_cache.values())[:18]):
+                    detail = skill.name + "  permission=" + skill.permission.value
+                    if skill.description:
+                        detail += "  " + skill.description
+                    safe(screen, 5 + index, 2, detail)
+            elif name == "AGENTS":
+                if not agent_cache:
+                    safe(screen, 5, 2, "No OpenClaw agents reported.")
+                for index, agent in enumerate(agent_cache[:18]):
+                    label = str(
+                        agent.get("name")
+                        or agent.get("id")
+                        or agent.get("agent")
+                        or "unnamed"
+                    )
+                    safe(screen, 5 + index, 2, label)
+            elif name == "MEMORY":
+                row = 5
+                for user in state.users():
+                    memories = state.memories(str(user["id"]), 6)
+                    if not memories:
+                        continue
+                    safe(screen, row, 2, str(user["name"]) + ":", curses.A_BOLD)
+                    row += 1
+                    for item in memories:
+                        safe(
+                            screen,
+                            row,
+                            4,
+                            str(item["key"]) + " = " + str(item["value"]),
+                        )
+                        row += 1
+                        if row >= screen.getmaxyx()[0] - 3:
+                            break
+                    if row >= screen.getmaxyx()[0] - 3:
+                        break
+                if row == 5:
+                    safe(screen, 5, 2, "No explicit per-user memories saved yet.")
+            elif name == "PERMISSIONS":
+                for index, user in enumerate(state.users()[:18]):
+                    safe(
+                        screen,
+                        5 + index,
+                        2,
+                        str(user["name"])
+                        + "  role="
+                        + str(user["role"])
+                        + "  grants="
+                        + describe_role(str(user["role"])),
+                    )
             elif name == "TIMELINE":
                 rows = state.recent_events(20)
                 for index, row in enumerate(rows):
@@ -203,6 +276,38 @@ def run() -> None:
                         2,
                         stamp + "  " + str(row["kind"]) + ": " + str(row["detail"]),
                     )
+            elif name == "LOGS":
+                rows = state.recent_events(20)
+                for index, row in enumerate(rows):
+                    stamp = time.strftime("%H:%M:%S", time.localtime(row["ts"]))
+                    safe(
+                        screen,
+                        5 + index,
+                        2,
+                        stamp + "  " + str(row["kind"]) + "  " + str(row["detail"]),
+                    )
+                if not rows:
+                    safe(screen, 5, 2, "No runtime events recorded yet.")
+            elif name == "SETTINGS":
+                try:
+                    config = load(config_path)
+                    safe(screen, 5, 2, "Mode: " + str(config["install"]["mode"]))
+                    safe(screen, 6, 2, "Start at boot: " + str(config["install"]["start_at_boot"]))
+                    safe(screen, 7, 2, "Wake word: " + str(config["assistant"]["wake_word"]))
+                    safe(screen, 8, 2, "Follow-up window: " + str(config["speech"]["follow_up_seconds"]) + "s")
+                    safe(screen, 9, 2, "Presence timeout: " + str(config["presence"]["timeout_seconds"]) + "s")
+                    safe(
+                        screen,
+                        10,
+                        2,
+                        "Quiet hours: "
+                        + str(config["proactive"]["quiet_hours_start"])
+                        + "–"
+                        + str(config["proactive"]["quiet_hours_end"]),
+                    )
+                    safe(screen, 11, 2, "Persist dialogue: " + str(config["privacy"]["persist_dialogue"]))
+                except Exception as exc:
+                    safe(screen, 5, 2, "Settings error: " + str(exc))
             elif name == "AUTH":
                 safe(screen, 5, 2, "Press A to authenticate.")
                 safe(
@@ -218,7 +323,7 @@ def run() -> None:
                     "The password is verified locally and is never added to dialogue.",
                 )
             else:
-                safe(screen, 5, 2, name + " panel connected to local Jervis state.")
+                safe(screen, 5, 2, "No panel renderer is registered for " + name + ".")
 
             if notice:
                 height, _ = screen.getmaxyx()
