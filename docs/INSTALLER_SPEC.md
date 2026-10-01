@@ -42,22 +42,21 @@ Cosmetic output must never obscure errors or required user actions.
 
 The intended public flow is:
 
-1. Bootstrap Jervis with one command.
-2. Detect OS, architecture, Python, and basic compatibility.
-3. Download the newest stable release on the current 7.1.x line.
-4. Verify the release SHA-256.
-5. Stage the new version in a versioned directory.
-6. Install the package into an isolated environment.
-7. Run import and version checks.
-8. Launch the Jervis setup wizard.
-9. Detect or install OpenClaw.
-10. Select Desktop or Server mode.
-11. Select microphone and output.
-12. Optionally configure Android phone microphone.
-13. Create the first owner and authentication passphrase.
-14. Configure managed startup.
-15. Verify configuration and service health.
-16. Commit the installation only after successful setup.
+1. Bootstrap Jervis with the stock shell for the operating system.
+2. Detect OS, architecture, and basic compatibility without requiring Python or Node.
+3. Download the matching self-contained native Jervis binary.
+4. Download SHA256SUMS and verify the native binary before execution.
+5. Copy the verified native runtime into the stable per-user Jervis location.
+6. Launch the Jervis setup wizard.
+7. Provision required host prerequisites inside the Jervis flow instead of using pre-TUI stdin prompts.
+8. Detect or install OpenClaw.
+9. Select Desktop or Server mode.
+10. Select microphone and output.
+11. Optionally configure Android phone microphone.
+12. Create the first owner and authentication passphrase.
+13. Configure managed startup.
+14. Verify configuration and service health.
+15. Commit the installation only after successful setup.
 
 If setup fails, the previous launcher and version pointer are restored.
 
@@ -107,8 +106,8 @@ Every stable release provides:
 
 - source distribution,
 - wheel,
-- universal jervis-installer.pyz,
-- SHA-256 checksum for the installer,
+- native binaries for each supported OS/architecture,
+- install.sh and install.ps1 native bootstrap scripts,
 - SHA256SUMS for release assets,
 - generated release notes.
 
@@ -119,6 +118,8 @@ Automatic update logic stays on the same major/minor line. A 7.1.x installation 
 
 The primary public release path does not require a preinstalled Python interpreter. GitHub Actions builds the same Jervis source into self-contained native binaries for Windows x64, Linux x64/ARM64, macOS Intel, and macOS Apple Silicon. The binary is both installer and runtime: first launch copies itself into the stable per-user Jervis location and runs setup; later launches expose the normal Jervis CLI/Control Deck.
 
-The Python zipapp remains a developer/portable fallback, not the fresh-machine requirement.
+Source installs remain available for developers, but are not part of the fresh-machine installation path. The public bootstrap must never require a preinstalled Python runtime.\n
 
-GitHub Releases also publish one all-platforms ZIP containing all native binaries. A literal shell command cannot be guaranteed identical across stock Windows PowerShell/cmd and POSIX shells because they do not share a command language or downloader; the product-level installer flow and release are nevertheless the same.
+## Input model
+
+Normal installer navigation uses the mouse or arrow keys. The installer must not require Tab, Enter, letter hotkeys, or a raw terminal yes/no prompt to move through setup. Text entry is reserved for values that are intrinsically textual, such as a person's name, a passphrase, or provider credentials handed off to OpenClaw.
