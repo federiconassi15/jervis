@@ -6,6 +6,7 @@ from dataclasses import asdict
 
 from .doctor import run_doctor
 from .installer import install
+from .repair import repair
 from .runtime import Runtime
 from .tui import run as run_tui
 from .updater import check as check_update
@@ -18,6 +19,8 @@ def main(argv=None) -> None:
     subparsers = parser.add_subparsers(dest="command")
     for name in ("run", "tui", "doctor", "install", "update-check"):
         subparsers.add_parser(name)
+    repair_parser = subparsers.add_parser("repair")
+    repair_parser.add_argument("component", choices=("audio", "openclaw"))
 
     args = parser.parse_args(argv)
     command = args.command or "tui"
@@ -34,6 +37,10 @@ def main(argv=None) -> None:
         raise SystemExit(install())
     elif command == "update-check":
         print(json.dumps(asdict(check_update()), indent=2))
+    elif command == "repair":
+        result = repair(args.component)
+        print(("[OK] " if result.ok else "[FAIL] ") + result.component + ": " + result.detail)
+        raise SystemExit(0 if result.ok else 1)
 
 
 if __name__ == "__main__":
