@@ -9,7 +9,11 @@ from typing import Any
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
 PRAGMA foreign_keys=ON;
+PRAGMA temp_store=MEMORY;
+PRAGMA busy_timeout=5000;
+PRAGMA wal_autocheckpoint=1000;
 CREATE TABLE IF NOT EXISTS users(
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -26,7 +30,7 @@ CREATE TABLE IF NOT EXISTS speaker_embeddings(
   created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_embeddings_user
-  ON speaker_embeddings(user_id,created_at DESC);
+  ON speaker_embeddings(user_id,quality DESC,created_at DESC);
 CREATE TABLE IF NOT EXISTS dialogue(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -35,6 +39,7 @@ CREATE TABLE IF NOT EXISTS dialogue(
   text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_dialogue_ts ON dialogue(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_dialogue_user_id ON dialogue(user_id,id DESC);
 CREATE TABLE IF NOT EXISTS events(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -59,7 +64,7 @@ CREATE TABLE IF NOT EXISTS presence(
   present INTEGER NOT NULL DEFAULT 1,
   seen_at REAL NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(present,seen_at DESC);
 CREATE TABLE IF NOT EXISTS notifications(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -69,7 +74,7 @@ CREATE TABLE IF NOT EXISTS notifications(
   delivered INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_delivery
-  ON notifications(delivered,id);
+  ON notifications(delivered,user_id,id);
 CREATE TABLE IF NOT EXISTS kv(
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -78,31 +83,73 @@ CREATE TABLE IF NOT EXISTS kv(
 
 
 class State:
+    PRUNE_EVERY = 64
+
     def __init__(self, path: Path, max_dialogue: int = 2000, max_events: int = 5000):
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.max_dialogue = int(max_dialogue)
-        self.max_events = int(max_events)
+        self.max_dialogue = max(1, int(max_dialogue))
+        self.max_events = max(1, int(max_events))
         self._lock = RLock()
-        self._db = sqlite3.connect(path, check_same_thread=False)
+        self._db = sqlite3.connect(
+            path,
+            check_same_thread=False,
+            timeout=5.0,
+            isolation_level="DEFERRED",
+        )
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
         self._db.commit()
+        self._events_since_prune = 0
+        self._dialogue_since_prune = 0
+        self._embedding_cache: dict[str, list[list[float]]] | None = None
+
+    @staticmethod
+    def _json(value: Any) -> str:
+        return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            try:
+                self._prune_events(force=True)
+                self._prune_dialogue(force=True)
+                self._db.execute("PRAGMA optimize")
+                self._db.commit()
+            finally:
+                self._db.close()
+
+    def _prune_events(self, *, force: bool = False) -> None:
+        if not force and self._events_since_prune < self.PRUNE_EVERY:
+            return
+        self._db.execute(
+            "DELETE FROM events WHERE id <= COALESCE(("
+            "SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?"
+            "),0)",
+            (self.max_events,),
+        )
+        self._events_since_prune = 0
+
+    def _prune_dialogue(self, *, force: bool = False) -> None:
+        if not force and self._dialogue_since_prune < self.PRUNE_EVERY:
+            return
+        self._db.execute(
+            "DELETE FROM dialogue WHERE id <= COALESCE(("
+            "SELECT id FROM dialogue ORDER BY id DESC LIMIT 1 OFFSET ?"
+            "),0)",
+            (self.max_dialogue,),
+        )
+        self._dialogue_since_prune = 0
+
+    def _insert_event_locked(self, kind: str, detail: str = "") -> None:
+        self._db.execute(
+            "INSERT INTO events(ts,kind,detail) VALUES(?,?,?)",
+            (time.time(), kind, str(detail)[:4000]),
+        )
+        self._events_since_prune += 1
+        self._prune_events()
 
     def event(self, kind: str, detail: str = "") -> None:
         with self._lock:
-            self._db.execute(
-                "INSERT INTO events(ts,kind,detail) VALUES(?,?,?)",
-                (time.time(), kind, str(detail)[:4000]),
-            )
-            self._db.execute(
-                "DELETE FROM events WHERE id NOT IN "
-                "(SELECT id FROM events ORDER BY id DESC LIMIT ?)",
-                (self.max_events,),
-            )
+            self._insert_event_locked(kind, detail)
             self._db.commit()
 
     def recent_events(self, limit: int = 30) -> list[sqlite3.Row]:
@@ -122,11 +169,8 @@ class State:
                 "INSERT INTO dialogue(ts,user_id,role,text) VALUES(?,?,?,?)",
                 (time.time(), user_id, role, str(text)[:12000]),
             )
-            self._db.execute(
-                "DELETE FROM dialogue WHERE id NOT IN "
-                "(SELECT id FROM dialogue ORDER BY id DESC LIMIT ?)",
-                (self.max_dialogue,),
-            )
+            self._dialogue_since_prune += 1
+            self._prune_dialogue()
             self._db.commit()
 
     def recent_dialogue(self, limit: int = 30) -> list[sqlite3.Row]:
@@ -140,18 +184,91 @@ class State:
         rows.reverse()
         return rows
 
-    def set_kv(self, key: str, value: Any) -> None:
+    def recent_user_dialogue(
+        self,
+        user_id: str,
+        limit: int = 10,
+    ) -> list[sqlite3.Row]:
         with self._lock:
+            rows = list(
+                self._db.execute(
+                    "SELECT ts,user_id,role,text FROM dialogue "
+                    "WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
+        rows.reverse()
+        return rows
+
+    def context_snapshot(
+        self,
+        user_id: str,
+        *,
+        memory_limit: int = 12,
+        dialogue_limit: int = 8,
+    ) -> dict[str, Any]:
+        with self._lock:
+            user = self._db.execute(
+                "SELECT * FROM users WHERE id=?",
+                (user_id,),
+            ).fetchone()
+            memories = list(
+                self._db.execute(
+                    "SELECT key,value,created_at,updated_at FROM memories "
+                    "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
+                    (user_id, max(1, int(memory_limit))),
+                )
+            )
+            dialogue = list(
+                self._db.execute(
+                    "SELECT ts,user_id,role,text FROM dialogue "
+                    "WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                    (user_id, max(1, int(dialogue_limit))),
+                )
+            )
+            agent = self._db.execute(
+                "SELECT value FROM kv WHERE key=?",
+                ("brain.agent." + user_id,),
+            ).fetchone()
+
+        dialogue.reverse()
+        return {
+            "user": user,
+            "memories": [
+                {
+                    "key": str(row["key"]),
+                    "value": json.loads(row["value"]),
+                    "created_at": float(row["created_at"]),
+                    "updated_at": float(row["updated_at"]),
+                }
+                for row in memories
+            ],
+            "dialogue": dialogue,
+            "agent": None if agent is None else json.loads(agent["value"]),
+        }
+
+    def set_kv(self, key: str, value: Any) -> None:
+        encoded = self._json(value)
+        with self._lock:
+            current = self._db.execute(
+                "SELECT value FROM kv WHERE key=?",
+                (key,),
+            ).fetchone()
+            if current is not None and str(current["value"]) == encoded:
+                return
             self._db.execute(
                 "INSERT INTO kv(key,value) VALUES(?,?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                (key, json.dumps(value)),
+                (key, encoded),
             )
             self._db.commit()
 
     def get_kv(self, key: str, default: Any = None) -> Any:
         with self._lock:
-            row = self._db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+            row = self._db.execute(
+                "SELECT value FROM kv WHERE key=?",
+                (key,),
+            ).fetchone()
         return default if row is None else json.loads(row["value"])
 
     def delete_kv(self, key: str) -> None:
@@ -161,7 +278,10 @@ class State:
 
     def pop_kv(self, key: str, default: Any = None) -> Any:
         with self._lock:
-            row = self._db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+            row = self._db.execute(
+                "SELECT value FROM kv WHERE key=?",
+                (key,),
+            ).fetchone()
             if row is None:
                 return default
             self._db.execute("DELETE FROM kv WHERE key=?", (key,))
@@ -170,12 +290,16 @@ class State:
 
     def user(self, user_id: str):
         with self._lock:
-            return self._db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            return self._db.execute(
+                "SELECT * FROM users WHERE id=?",
+                (user_id,),
+            ).fetchone()
 
     def user_by_name(self, name: str):
         with self._lock:
             return self._db.execute(
-                "SELECT * FROM users WHERE name=? COLLATE NOCASE", (name,)
+                "SELECT * FROM users WHERE name=? COLLATE NOCASE",
+                (name,),
             ).fetchone()
 
     def users(self) -> list[sqlite3.Row]:
@@ -207,10 +331,13 @@ class State:
             )
             self._db.commit()
 
-    def touch_user(self, user_id: str) -> None:
+    def touch_user(self, user_id: str, *, now: float | None = None) -> None:
+        stamp = time.time() if now is None else float(now)
         with self._lock:
             self._db.execute(
-                "UPDATE users SET last_seen=? WHERE id=?", (time.time(), user_id)
+                "UPDATE users SET last_seen=? "
+                "WHERE id=? AND (last_seen IS NULL OR last_seen < ?)",
+                (stamp, user_id, stamp - 5.0),
             )
             self._db.commit()
 
@@ -225,7 +352,7 @@ class State:
             self._db.execute(
                 "INSERT INTO speaker_embeddings(user_id,embedding,quality,created_at) "
                 "VALUES(?,?,?,?)",
-                (user_id, json.dumps(embedding), float(quality), time.time()),
+                (user_id, self._json(embedding), float(quality), time.time()),
             )
             self._db.execute(
                 "DELETE FROM speaker_embeddings WHERE user_id=? AND id NOT IN "
@@ -234,20 +361,27 @@ class State:
                 (user_id, user_id, int(limit)),
             )
             self._db.commit()
+            self._embedding_cache = None
 
     def embeddings(self) -> dict[str, list[list[float]]]:
         with self._lock:
-            rows = list(
-                self._db.execute(
-                    "SELECT user_id,embedding FROM speaker_embeddings "
-                    "ORDER BY user_id,quality DESC"
+            if self._embedding_cache is None:
+                rows = list(
+                    self._db.execute(
+                        "SELECT user_id,embedding FROM speaker_embeddings "
+                        "ORDER BY user_id,quality DESC"
+                    )
                 )
-            )
-        out: dict[str, list[list[float]]] = {}
-        for row in rows:
-            out.setdefault(row["user_id"], []).append(json.loads(row["embedding"]))
-        return out
-
+                cache: dict[str, list[list[float]]] = {}
+                for row in rows:
+                    cache.setdefault(str(row["user_id"]), []).append(
+                        json.loads(row["embedding"])
+                    )
+                self._embedding_cache = cache
+            return {
+                user_id: list(vectors)
+                for user_id, vectors in self._embedding_cache.items()
+            }
 
     def remember(self, user_id: str, key: str, value: Any) -> None:
         clean = key.strip()
@@ -263,7 +397,7 @@ class State:
                   value=excluded.value,
                   updated_at=excluded.updated_at
                 """,
-                (user_id, clean, json.dumps(value), now, now),
+                (user_id, clean, self._json(value), now, now),
             )
             self._db.commit()
 
@@ -302,15 +436,25 @@ class State:
             )
             self._db.commit()
 
+    def clear_memories(self, user_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM memories WHERE user_id=?", (user_id,))
+            self._db.commit()
+
     def set_presence(
         self,
         user_id: str,
         source: str,
         confidence: float,
         present: bool = True,
-    ) -> None:
+    ) -> bool:
         now = time.time()
         with self._lock:
+            previous = self._db.execute(
+                "SELECT present FROM presence WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            was_present = bool(previous and previous["present"])
             self._db.execute(
                 """
                 INSERT INTO presence(user_id,source,confidence,present,seen_at)
@@ -323,7 +467,13 @@ class State:
                 """,
                 (user_id, source, float(confidence), 1 if present else 0, now),
             )
+            self._db.execute(
+                "UPDATE users SET last_seen=? "
+                "WHERE id=? AND (last_seen IS NULL OR last_seen < ?)",
+                (now, user_id, now - 5.0),
+            )
             self._db.commit()
+            return was_present
 
     def presence(self, present_only: bool = False) -> list[sqlite3.Row]:
         query = (
@@ -335,28 +485,6 @@ class State:
         query += "ORDER BY p.seen_at DESC"
         with self._lock:
             return list(self._db.execute(query))
-
-
-    def clear_memories(self, user_id: str) -> None:
-        with self._lock:
-            self._db.execute("DELETE FROM memories WHERE user_id=?", (user_id,))
-            self._db.commit()
-
-    def recent_user_dialogue(
-        self,
-        user_id: str,
-        limit: int = 10,
-    ) -> list[sqlite3.Row]:
-        with self._lock:
-            rows = list(
-                self._db.execute(
-                    "SELECT ts,user_id,role,text FROM dialogue "
-                    "WHERE user_id=? ORDER BY id DESC LIMIT ?",
-                    (user_id, max(1, int(limit))),
-                )
-            )
-        rows.reverse()
-        return rows
 
     def notify(self, key: str, text: str, user_id: str | None = None) -> int:
         with self._lock:

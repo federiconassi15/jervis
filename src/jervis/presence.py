@@ -4,20 +4,14 @@ import time
 
 
 class PresenceManager:
-    """Tracks lightweight local presence without external polling daemons."""
+    """Tracks lightweight local presence without redundant database round trips."""
 
     def __init__(self, state, timeout_seconds: int = 300) -> None:
         self.state = state
         self.timeout_seconds = max(30, int(timeout_seconds))
 
     def seen(self, user_id: str, source: str = "voice", confidence: float = 1.0) -> None:
-        existing = next(
-            (row for row in self.state.presence() if str(row["user_id"]) == user_id),
-            None,
-        )
-        was_present = bool(existing and existing["present"])
-        self.state.set_presence(user_id, source, confidence, True)
-        self.state.touch_user(user_id)
+        was_present = self.state.set_presence(user_id, source, confidence, True)
         if not was_present:
             self.state.event("presence_entered", "user=" + user_id + " source=" + source)
 
@@ -40,7 +34,13 @@ class PresenceManager:
         for row in self.state.presence(present_only=True):
             if current - float(row["seen_at"]) >= self.timeout_seconds:
                 user_id = str(row["user_id"])
-                self.left(user_id)
+                self.state.set_presence(
+                    user_id,
+                    "timeout",
+                    float(row["confidence"]),
+                    False,
+                )
+                self.state.event("presence_left", "user=" + user_id + " source=timeout")
                 left.append(user_id)
         return left
 
