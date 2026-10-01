@@ -313,6 +313,7 @@ class JervisInstaller(App[int]):
             yield Static("“" + self.tagline + "”", id="tagline")
             yield Static("", id="stepbar")
             yield Static("SYSTEM CHECK · READY", id="system-line")
+            yield Static("", id="context")
 
             with ContentSwitcher(initial="page-mode", id="pages"):
                 with VerticalScroll(classes="page", id="page-mode"):
@@ -335,7 +336,6 @@ class JervisInstaller(App[int]):
                         self._platform_summary(),
                         classes="card",
                     )
-                    yield Static("", id="context")
 
                 with VerticalScroll(classes="page", id="page-brain"):
                     yield Static("Connect the OpenClaw brain", classes="title")
@@ -444,7 +444,7 @@ class JervisInstaller(App[int]):
                     yield Button("Finish", id="finish-button", variant="primary")
 
             with Horizontal(id="nav"):
-                yield Static("↑↓ select/control   ← back   → next   mouse enabled", id="nav-hint")
+                yield Static("↑↓ move   ←→ change choice / navigate   mouse enabled", id="nav-hint")
                 yield Button("Back", id="back")
                 yield Button("Next", id="next", variant="primary")
 
@@ -821,11 +821,44 @@ class JervisInstaller(App[int]):
     def finish_pressed(self) -> None:
         self.exit(0)
 
+    def _cycle_focused_select(self, direction: int) -> bool:
+        focused = self.screen.focused
+        if not isinstance(focused, Select):
+            return False
+
+        options = list(focused._options)
+        values = [option.value for option in options]
+        if not values:
+            return True
+
+        current = focused.value
+        try:
+            index = values.index(current)
+        except ValueError:
+            index = 0
+        focused.value = values[(index + direction) % len(values)]
+        self._refresh_context()
+        return True
+
     def action_back(self) -> None:
+        focused = self.screen.focused
+        if isinstance(focused, Switch):
+            focused.value = False
+            self._refresh_context()
+            return
+        if self._cycle_focused_select(-1):
+            return
         if 0 < self.step < 5:
             self._switch(self.step - 1)
 
     def action_forward(self) -> None:
+        focused = self.screen.focused
+        if isinstance(focused, Switch):
+            focused.value = True
+            self._refresh_context()
+            return
+        if self._cycle_focused_select(1):
+            return
         if self.step < 5:
             self.next_page()
 
