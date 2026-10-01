@@ -67,3 +67,21 @@ def test_context_snapshot_batches_user_memory_dialogue_and_agent(tmp_path):
         assert snapshot["agent"] == "ops"
     finally:
         state.close()
+
+
+def test_context_snapshot_can_skip_dialogue(tmp_path):
+    state = State(tmp_path / "state.sqlite3")
+    try:
+        state.upsert_user("u1", "Alex", "sir", "owner")
+        state.remember("u1", "fact", "keep me")
+        state.dialogue("Alex", "do not replay me", "u1")
+
+        snapshot = state.context_snapshot(
+            "u1",
+            memory_limit=6,
+            dialogue_limit=0,
+        )
+        assert snapshot["memories"][0]["value"] == "keep me"
+        assert snapshot["dialogue"] == []
+    finally:
+        state.close()
