@@ -1,62 +1,61 @@
-# Installer: Openclaw Install
+# Installer: OpenClaw Setup
 
-## Purpose
+Jervis 7.3.1 owns the OpenClaw first-run experience. The user answers OpenClaw setup questions inside the Jervis Installation Control Deck rather than being dropped into the raw OpenClaw wizard.
 
-This page covers **Openclaw Install** for the **Installer** subsystem in Jervis 7.1. The goal is to keep the feature understandable, inspectable, and portable across Windows, macOS, and Linux without splitting Jervis into separate products.
+## What Jervis collects
 
-## Runtime relationship
+The Brain step can collect and apply:
 
-Jervis separates the always-on local shell from the OpenClaw brain. Wake detection, audio capture, session identity, local state, permissions, and diagnostics should continue operating when OpenClaw or an external model provider is unavailable. Openclaw Install must respect that failure boundary.
+- model provider / authentication route
+- provider API key or token where required
+- OpenClaw agent name
+- custom-provider base URL, model ID, provider ID, compatibility mode, and image-input capability
+- Gateway bind mode
+- Gateway authentication mode and credential
+- Gateway daemon install choice
+- daemon runtime (Node or Bun)
+- Node package manager for skills
+- optional skills, hooks, channels, and web-search setup choices
+- explicit acknowledgement of OpenClaw's agent/system-access risk
 
-The active conversation model favors continuity: once a user is strongly identified or explicitly authenticated, Jervis maintains a trusted session and refreshes it through natural follow-up turns. A single uncertain sample should produce a retry or session-assisted result, not an immediate password loop.
+Provider and Gateway secrets are masked in the installer and are never shown on the final review screen.
 
-## Deployment behavior
+## Supported model/auth routes
 
-Desktop mode integrates with the current user's normal audio devices and login session. Server mode uses the same feature set but prioritizes persistence, explicit hardware selection, and remote diagnostics. Platform adapters translate Jervis lifecycle operations into systemd, Task Scheduler, or launchd.
+Jervis currently exposes:
 
-## Configuration
+- ChatGPT / Codex subscription
+- OpenAI API key
+- Anthropic API key
+- Google Gemini API key
+- OpenRouter API key
+- Mistral API key
+- Z.AI API key
+- xAI / Grok OAuth
+- GitHub Copilot token
+- custom OpenAI-compatible, OpenAI Responses-compatible, or Anthropic-compatible providers
+- Ollama
+- LM Studio
+- configure later
 
-Configuration is validated before activation and written atomically. Avoid embedding OS paths, usernames, IP addresses, device serials, provider keys, or personal identity values into source code. Machine-specific choices belong in local configuration or state.
+API-key, token, custom, and local-provider paths are driven through OpenClaw's supported non-interactive onboarding interface.
 
-## Operational guidance
+## External authorization
 
-For Openclaw Install, prefer observable state over hidden behavior. Important transitions should emit events into the timeline, and errors should be actionable. Long-running background work should be event-driven or rate-limited so a low-resource server is not punished by idle polling.
+Browser/device authorization cannot be replaced by a local installer form. ChatGPT/Codex and xAI OAuth therefore finish with an explicit Jervis authorization step after the core install.
 
-## Security rules
+Server-mode ChatGPT/Codex authorization uses device code so the Gateway host can remain headless.
 
-- Treat microphone data and speaker embeddings as sensitive local data.
-- Do not log spoken passwords or TUI authentication secrets.
-- Enforce permissions at the action boundary.
-- Do not assume a recognized voice is sufficient for destructive or privileged operations.
-- Keep third-party skills and agents isolated from secrets they do not need.
+## No raw OpenClaw wizard
 
-## Cross-platform behavior
+For automated provider paths Jervis invokes OpenClaw with non-interactive onboarding and suppresses the OpenClaw UI. If OpenClaw cannot complete a selected path without an external authorization or capability review, Jervis reports that state instead of silently opening another wizard.
 
-The shared Python core owns semantics. OS adapters own startup and host integration only. Tests should prove that platform-specific code can be imported safely on the other operating systems without executing unavailable host commands.
+## Safety
 
-## Troubleshooting flow
-
-1. Run `jervis doctor`.
-2. Check the Control Deck timeline.
-3. Confirm the active config path and selected devices.
-4. Check service state on the current OS.
-5. If OpenClaw is involved, run `openclaw doctor`.
-6. Reproduce with sanitized logs before changing thresholds or reinstalling.
-
-## Development checklist
-
-- Normal path tested.
-- Failure path tested.
-- No secret leakage.
-- Bounded storage and queues.
-- No unnecessary busy loop.
-- Works with missing optional provider.
-- Rollback path still valid.
-- Documentation updated when user-facing behavior changes.
+Jervis does not auto-accept OpenClaw's agent/system-access warning. The user must explicitly acknowledge it in the Jervis installer.
 
 ## Related pages
 
 - [Installer index](installer-index.md)
-- [Wiki Home](Home.md)
-- [Previous](installer-android-selection.md)
-- [Next](installer-config-generation.md)
+- [OpenClaw Authentication](openclaw-authentication.md)
+- [Getting Started: OpenClaw Setup](getting-started-openclaw-setup.md)

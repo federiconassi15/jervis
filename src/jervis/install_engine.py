@@ -9,8 +9,9 @@ from typing import Callable
 from .config import DEFAULT_CONFIG, load, save
 from .install_plan import InstallOutcome, InstallPlan
 from .install_tx import InstallTransaction
+from .openclaw_setup import configure_noninteractive
 from .openclaw_setup import doctor as openclaw_doctor
-from .openclaw_setup import find_openclaw, install_official
+from .openclaw_setup import find_openclaw, install_official, needs_interactive_authorization
 from .paths import Paths
 from .platforms import current_platform
 from .prereqs import ensure_adb, ensure_linux_audio, ensure_linux_openclaw_tools
@@ -122,6 +123,19 @@ def run_install(
         outcome.warnings.append("OpenClaw is not configured; local Jervis features remain available.")
     else:
         outcome.openclaw_cli = str(cli)
+        if plan.openclaw_auth == "later":
+            pass
+        elif needs_interactive_authorization(plan):
+            outcome.openclaw_needs_auth = True
+        else:
+            _emit(
+                progress,
+                2,
+                "Configuring OpenClaw",
+                "Applying provider, Gateway, daemon, and optional feature choices",
+            )
+            configure_noninteractive(cli, plan)
+            outcome.openclaw_configured = True
 
     _emit(progress, 3, "Resolving audio", "Checking selected microphone and output")
     android_serial = plan.android_serial
@@ -206,9 +220,13 @@ def run_install(
         if cli:
             healthy, _detail = openclaw_doctor(cli)
             if not healthy:
-                outcome.warnings.append(
-                    "OpenClaw doctor reported warnings; finish sign-in and run openclaw doctor."
+                message = (
+                    "OpenClaw doctor reported warnings; finish external authorization and "
+                    "run openclaw doctor."
+                    if outcome.openclaw_needs_auth
+                    else "OpenClaw doctor reported warnings; run openclaw doctor."
                 )
+                outcome.warnings.append(message)
 
         transaction.commit()
 

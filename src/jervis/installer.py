@@ -30,7 +30,7 @@ from textual.widgets import (
 from .audio.devices import default_devices, list_devices
 from .install_engine import TOTAL_STEPS, run_install
 from .install_plan import InstallOutcome, InstallPlan
-from .openclaw_setup import configure_mode, find_openclaw
+from .openclaw_setup import configure_interactive_authorization, find_openclaw
 from .prereqs import ensure_linux_audio, find_adb
 from .version import __version__
 
@@ -320,7 +320,26 @@ class JervisInstaller(App[int]):
         self.inputs, self.outputs, self.androids = self._detect_audio()
         self.select_values = {
             "mode": ["desktop", "server"],
-            "openclaw-auth": ["codex", "api-key", "full", "later"],
+            "openclaw-auth": [
+                "openai",
+                "openai-api-key",
+                "anthropic-api-key",
+                "gemini-api-key",
+                "openrouter-api-key",
+                "mistral-api-key",
+                "zai-api-key",
+                "xai-oauth",
+                "github-copilot",
+                "custom-api-key",
+                "ollama",
+                "lmstudio",
+                "later",
+            ],
+            "openclaw-gateway-bind": ["loopback", "auto", "lan", "tailnet"],
+            "openclaw-gateway-auth": ["generated-token", "token", "password"],
+            "openclaw-daemon-runtime": ["node", "bun"],
+            "openclaw-node-manager": ["npm", "pnpm", "bun"],
+            "openclaw-custom-compat": ["openai", "openai-responses", "anthropic"],
             "microphone": [value for _label, value in self.inputs],
             "output": [value for _label, value in self.outputs],
             "honorific": ["sir", "maam"],
@@ -421,8 +440,7 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-brain"):
                     yield Static("┌─ 02 // OPENCLAW BRAIN ─────────────────────┐", classes="title")
                     yield Static(
-                        "Jervis sets up OpenClaw automatically. "
-                        "You only leave this screen for a required sign-in.",
+                        "Jervis owns the setup flow. OpenClaw runs behind this screen.",
                         classes="hint",
                     )
                     yield Static(
@@ -434,20 +452,130 @@ class JervisInstaller(App[int]):
                         classes="card",
                         id="openclaw-status",
                     )
+                    yield Label("AI provider / authentication")
                     yield Select(
                         [
-                            ("ChatGPT / Codex subscription · recommended", "codex"),
-                            ("OpenAI API key", "api-key"),
-                            ("Full OpenClaw setup / another provider", "full"),
+                            ("ChatGPT / Codex subscription", "openai"),
+                            ("OpenAI API key", "openai-api-key"),
+                            ("Anthropic API key", "anthropic-api-key"),
+                            ("Google Gemini API key", "gemini-api-key"),
+                            ("OpenRouter API key", "openrouter-api-key"),
+                            ("Mistral API key", "mistral-api-key"),
+                            ("Z.AI API key", "zai-api-key"),
+                            ("xAI / Grok OAuth", "xai-oauth"),
+                            ("GitHub Copilot token", "github-copilot"),
+                            ("Custom OpenAI / Anthropic-compatible provider", "custom-api-key"),
+                            ("Ollama", "ollama"),
+                            ("LM Studio", "lmstudio"),
                             ("Configure OpenClaw later", "later"),
                         ],
-                        value="codex",
+                        value="openai",
                         allow_blank=False,
                         id="openclaw-auth",
+                    )
+                    yield Input(
+                        placeholder="Provider API key / token",
+                        password=True,
+                        id="openclaw-provider-key",
+                    )
+                    yield Input(
+                        value="main",
+                        placeholder="OpenClaw agent name",
+                        id="openclaw-agent-name",
+                    )
+
+                    yield Static("CUSTOM / LOCAL PROVIDER", classes="hint", id="openclaw-custom-title")
+                    yield Input(
+                        placeholder="Base URL · e.g. https://llm.example.com/v1",
+                        id="openclaw-custom-base-url",
+                    )
+                    yield Input(
+                        placeholder="Model ID · e.g. foo-large",
+                        id="openclaw-custom-model-id",
+                    )
+                    yield Input(
+                        placeholder="Provider ID · optional",
+                        id="openclaw-custom-provider-id",
+                    )
+                    yield Select(
+                        [
+                            ("OpenAI chat/completions compatible", "openai"),
+                            ("OpenAI Responses compatible", "openai-responses"),
+                            ("Anthropic compatible", "anthropic"),
+                        ],
+                        value="openai",
+                        allow_blank=False,
+                        id="openclaw-custom-compat",
+                    )
+                    with Horizontal(classes="card", id="openclaw-custom-image-row"):
+                        yield Label("Model accepts image input")
+                        yield Switch(value=False, id="openclaw-custom-image")
+
+                    yield Static("GATEWAY", classes="hint")
+                    yield Select(
+                        [
+                            ("Loopback only · safest default", "loopback"),
+                            ("Auto · container aware", "auto"),
+                            ("LAN · private network exposure", "lan"),
+                            ("Tailnet · Tailscale IP", "tailnet"),
+                        ],
+                        value="loopback",
+                        allow_blank=False,
+                        id="openclaw-gateway-bind",
+                    )
+                    yield Select(
+                        [
+                            ("Generate a Gateway token automatically", "generated-token"),
+                            ("Use my Gateway token", "token"),
+                            ("Use a Gateway password", "password"),
+                        ],
+                        value="generated-token",
+                        allow_blank=False,
+                        id="openclaw-gateway-auth",
+                    )
+                    yield Input(
+                        placeholder="Gateway token / password",
+                        password=True,
+                        id="openclaw-gateway-secret",
+                    )
+
+                    yield Static("RUNTIME + OPTIONAL SETUP", classes="hint")
+                    yield Select(
+                        [("Node · recommended", "node"), ("Bun", "bun")],
+                        value="node",
+                        allow_blank=False,
+                        id="openclaw-daemon-runtime",
+                    )
+                    yield Select(
+                        [("npm", "npm"), ("pnpm", "pnpm"), ("bun", "bun")],
+                        value="npm",
+                        allow_blank=False,
+                        id="openclaw-node-manager",
                     )
                     with Horizontal(classes="card"):
                         yield Label("Install OpenClaw automatically if missing")
                         yield Switch(value=True, id="openclaw-install")
+                    with Horizontal(classes="card"):
+                        yield Label("Install OpenClaw Gateway daemon")
+                        yield Switch(value=True, id="openclaw-daemon")
+                    with Horizontal(classes="card"):
+                        yield Label("Set up skills")
+                        yield Switch(value=True, id="openclaw-skills")
+                    with Horizontal(classes="card"):
+                        yield Label("Set up hooks")
+                        yield Switch(value=True, id="openclaw-hooks")
+                    with Horizontal(classes="card"):
+                        yield Label("Set up channels")
+                        yield Switch(value=False, id="openclaw-channels")
+                    with Horizontal(classes="card"):
+                        yield Label("Set up web search")
+                        yield Switch(value=True, id="openclaw-search")
+
+                    with Horizontal(classes="card"):
+                        yield Label(
+                            "I understand OpenClaw agents can use tools and system access"
+                        )
+                        yield Switch(value=False, id="openclaw-risk")
 
                 with VerticalScroll(classes="page", id="page-audio"):
                     yield Static("┌─ 03 // AUDIO MATRIX ───────────────────────┐", classes="title")
@@ -609,9 +737,18 @@ class JervisInstaller(App[int]):
         elif self.step == 1:
             auth = str(self.query_one("#openclaw-auth", Select).value)
             labels = {
-                "codex": "ChatGPT/Codex subscription · guided sign-in",
-                "api-key": "OpenAI API key · provider credential setup",
-                "full": "Full OpenClaw onboarding · alternate providers supported",
+                "openai": "ChatGPT/Codex subscription · external authorization only",
+                "openai-api-key": "OpenAI API key · hidden onboarding",
+                "anthropic-api-key": "Anthropic API key · hidden onboarding",
+                "gemini-api-key": "Gemini API key · hidden onboarding",
+                "openrouter-api-key": "OpenRouter API key · hidden onboarding",
+                "mistral-api-key": "Mistral API key · hidden onboarding",
+                "zai-api-key": "Z.AI API key · hidden onboarding",
+                "xai-oauth": "xAI/Grok OAuth · external authorization only",
+                "github-copilot": "GitHub Copilot token · hidden onboarding",
+                "custom-api-key": "Custom provider · hidden onboarding",
+                "ollama": "Ollama · hidden onboarding",
+                "lmstudio": "LM Studio · hidden onboarding",
                 "later": "Brain setup deferred · local Jervis remains usable",
             }
             text = "Brain  ·  " + labels.get(auth, "select an authentication mode")
@@ -694,6 +831,61 @@ class JervisInstaller(App[int]):
                 self.plan.install_openclaw = bool(
                     self.query_one("#openclaw-install", Switch).value
                 )
+                self.plan.openclaw_accept_risk = bool(
+                    self.query_one("#openclaw-risk", Switch).value
+                )
+                self.plan.openclaw_agent_name = self.query_one(
+                    "#openclaw-agent-name", Input
+                ).value.strip()
+                self.plan.openclaw_api_key = self.query_one(
+                    "#openclaw-provider-key", Input
+                ).value
+                self.plan.openclaw_gateway_bind = str(
+                    self.query_one("#openclaw-gateway-bind", Select).value
+                )
+                self.plan.openclaw_gateway_auth = str(
+                    self.query_one("#openclaw-gateway-auth", Select).value
+                )
+                self.plan.openclaw_gateway_secret = self.query_one(
+                    "#openclaw-gateway-secret", Input
+                ).value
+                self.plan.openclaw_daemon_runtime = str(
+                    self.query_one("#openclaw-daemon-runtime", Select).value
+                )
+                self.plan.openclaw_node_manager = str(
+                    self.query_one("#openclaw-node-manager", Select).value
+                )
+                self.plan.openclaw_install_daemon = bool(
+                    self.query_one("#openclaw-daemon", Switch).value
+                )
+                self.plan.openclaw_setup_skills = bool(
+                    self.query_one("#openclaw-skills", Switch).value
+                )
+                self.plan.openclaw_setup_hooks = bool(
+                    self.query_one("#openclaw-hooks", Switch).value
+                )
+                self.plan.openclaw_setup_channels = bool(
+                    self.query_one("#openclaw-channels", Switch).value
+                )
+                self.plan.openclaw_setup_search = bool(
+                    self.query_one("#openclaw-search", Switch).value
+                )
+                self.plan.openclaw_custom_base_url = self.query_one(
+                    "#openclaw-custom-base-url", Input
+                ).value.strip()
+                self.plan.openclaw_custom_model_id = self.query_one(
+                    "#openclaw-custom-model-id", Input
+                ).value.strip()
+                self.plan.openclaw_custom_provider_id = self.query_one(
+                    "#openclaw-custom-provider-id", Input
+                ).value.strip()
+                self.plan.openclaw_custom_compatibility = str(
+                    self.query_one("#openclaw-custom-compat", Select).value
+                )
+                self.plan.openclaw_custom_image_input = bool(
+                    self.query_one("#openclaw-custom-image", Switch).value
+                )
+                self.plan.validate_openclaw()
             elif self.step == 2:
                 mic_value = self.query_one("#microphone", Select).value
                 output_value = self.query_one("#output", Select).value
@@ -741,14 +933,30 @@ class JervisInstaller(App[int]):
             else "Computer microphone #" + str(self.plan.input_device)
         )
         brain = {
-            "codex": "ChatGPT / Codex subscription",
-            "api-key": "OpenAI API key",
-            "full": "Full OpenClaw setup",
+            "openai": "ChatGPT / Codex subscription",
+            "openai-api-key": "OpenAI API key",
+            "anthropic-api-key": "Anthropic API key",
+            "gemini-api-key": "Google Gemini API key",
+            "openrouter-api-key": "OpenRouter API key",
+            "mistral-api-key": "Mistral API key",
+            "zai-api-key": "Z.AI API key",
+            "xai-oauth": "xAI / Grok OAuth",
+            "github-copilot": "GitHub Copilot token",
+            "custom-api-key": "Custom provider",
+            "ollama": "Ollama",
+            "lmstudio": "LM Studio",
             "later": "Configure later",
         }[self.plan.openclaw_auth]
         lines = [
             "✓  [b]Mode[/b]          " + self.plan.mode.title(),
             "✓  [b]Brain[/b]         " + brain,
+            "✓  [b]OpenClaw agent[/b] " + self.plan.openclaw_agent_name,
+            "✓  [b]Gateway[/b]       "
+            + self.plan.openclaw_gateway_bind
+            + " · "
+            + self.plan.openclaw_gateway_auth,
+            "✓  [b]Provider secret[/b] "
+            + ("configured (hidden)" if self.plan.openclaw_api_key else "not required / external auth"),
             "✓  [b]Microphone[/b]    " + microphone,
             "✓  [b]Output[/b]        Device #" + str(self.plan.output_device),
             "✓  [b]Startup[/b]       " + ("Automatic" if self.plan.start_at_boot else "Manual"),
@@ -900,10 +1108,9 @@ class JervisInstaller(App[int]):
                 title="OpenClaw",
             )
             with self.suspend():
-                configure_mode(
+                configure_interactive_authorization(
                     Path(self.outcome.openclaw_cli),
-                    self.plan.mode,
-                    self.plan.openclaw_auth,
+                    self.plan,
                 )
         except Exception as exc:
             _terminal_cue("attention")
@@ -1072,14 +1279,11 @@ class JervisInstaller(App[int]):
             self.query_one("#progress-detail", Static).update(
                 "\n".join("• " + item for item in outcome.warnings)
             )
-        needs_auth = bool(
-            outcome.openclaw_cli
-            and self.plan.openclaw_auth != "later"
-        )
+        needs_auth = bool(outcome.openclaw_cli and outcome.openclaw_needs_auth)
         if needs_auth:
             _terminal_cue("attention")
             self.query_one("#progress-status", Static).update(
-                "Jervis is installed. One sign-in remains."
+                "Jervis is installed. External account authorization remains."
             )
             self.query_one("#auth-button", Button).display = True
         else:

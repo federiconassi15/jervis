@@ -1,61 +1,47 @@
 # OpenClaw: Authentication
 
-## Purpose
+Jervis 7.3.1 can configure OpenClaw authentication from inside the Jervis installer.
 
-This page documents **Authentication** in the **OpenClaw** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.
+## Headless ChatGPT / Codex
 
-## How it works
+Desktop mode uses browser OAuth.
 
-Jervis keeps OS-specific behavior behind platform adapters while the voice loop, identity sessions, permissions, state, skills, and OpenClaw routing remain shared. Authentication should therefore behave consistently even when the host operating system uses a different audio API, startup manager, or filesystem convention.
+Server mode uses OpenClaw's device-code login so a headless host can display the authorization code while approval happens on another device.
 
-For the 7.1 reliability line, the default interaction is: wake word → **Boss?** acknowledgement → capture the full natural command → evaluate the trusted session and speaker evidence → route locally or through OpenClaw → keep the same speaker locked through the follow-up window.
+## API-key providers
 
-## Desktop and Server behavior
+The installer has first-class routes for OpenAI, Anthropic, Gemini, OpenRouter, Mistral, Z.AI, and GitHub Copilot token authentication.
 
-**Desktop mode** uses the user's normal computer audio devices. Setup enumerates available microphones and outputs and asks which ones Jervis should use. An Android phone may be selected as the microphone.
+Secrets are entered through masked Jervis fields and are omitted from Jervis review output and dataclass representations.
 
-**Server mode** uses the same runtime but emphasizes persistent startup, explicit device choices, and remote-friendly diagnostics. It is suitable for a NUC, home server, workstation, or other always-on machine.
+## Custom and local providers
 
-## Cross-platform notes
+Custom providers can specify:
 
-- **Linux:** managed startup uses a systemd user service where available.
-- **Windows:** per-user managed startup uses Task Scheduler.
-- **macOS:** managed startup uses launchd.
-- Desktop audio is exposed through the host PortAudio backend.
-- Android AudioSource uses ADB forwarding to a localhost TCP socket, so the Jervis-side transport is shared across all three operating systems.
+- base URL
+- model ID
+- optional provider ID
+- OpenAI chat/completions, OpenAI Responses, or Anthropic compatibility
+- text-only or image-capable input
 
-## Reliability rules
+Ollama and LM Studio can also be configured from the same Brain step.
 
-1. Do not turn one noisy voice sample into an authentication loop.
-2. Keep expensive speech and speaker models lazy where practical.
-3. Bound histories, queues, caches, and stored embeddings.
-4. Repair the smallest failed component before restarting the whole runtime.
-5. Keep the local shell useful when OpenClaw or a model provider is unavailable.
-6. Treat speaker recognition as a convenience identity signal, not high-assurance security.
+## Gateway authentication
 
-## Privacy and security
+Jervis can ask OpenClaw to:
 
-Never commit provider credentials, authentication passphrases, voiceprints, raw recordings, private dialogue, Android serial numbers, private IP addresses, or personal filesystem paths. Jervis stores authentication passphrases as PBKDF2-HMAC-SHA256 verifiers rather than plaintext. Raw microphone audio is not intended to be persisted by default.
+- generate a Gateway token
+- use a supplied Gateway token
+- use a supplied Gateway password
 
-## Diagnostics
+Gateway bind choices include loopback, auto, LAN, and Tailnet.
 
-Start with `jervis doctor`. For agentic-brain problems, also use `openclaw doctor`. The Control Deck timeline should show wake, identity, routing, provider, and repair events with timestamps so failures can be diagnosed without guessing.
+## External authorization boundary
 
-When debugging Authentication, verify configuration and selected devices before changing recognition thresholds. Threshold changes should be a last step after confirming that audio quality and session state are healthy.
+OAuth/device-code approval remains an external account-provider action. Jervis keeps the setup state and returns to the Installation Control Deck after authorization.
 
-## Development checklist
+## Security
 
-- Test the normal path.
-- Test at least one failure path.
-- Consider Windows, macOS, and Linux behavior.
-- Consider Desktop and Server modes.
-- Avoid blocking or hot-polling work in the always-on loop.
-- Avoid logging secrets or authentication text.
-- Preserve rollback and doctor behavior when setup files change.
+Never paste provider secrets into issue reports, logs, screenshots, or committed configuration examples.
 
-## Related pages
-
-- [OpenClaw index](openclaw-index.md)
-- [Wiki Home](Home.md)
-- [Previous](openclaw-onboarding.md)
-- [Next](openclaw-agents.md)
+[Back to OpenClaw index](openclaw-index.md)

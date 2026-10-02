@@ -14,6 +14,7 @@ def test_install_plan_validation():
         owner_name="Example",
         honorific="sir",
         passphrase="correct horse battery staple",
+        openclaw_accept_risk=True,
     )
     plan.validate()
 

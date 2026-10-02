@@ -1,61 +1,29 @@
-# Getting Started: Openclaw Setup
+# Getting Started: OpenClaw Setup
 
-## Purpose
+OpenClaw setup is integrated into the Jervis installer.
 
-This page documents **Openclaw Setup** in the **Getting Started** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.
+## Brain step
 
-## How it works
+Choose your provider, enter any required credential, configure the Gateway, and choose daemon/runtime options without leaving the Jervis Installation Control Deck.
 
-Jervis keeps OS-specific behavior behind platform adapters while the voice loop, identity sessions, permissions, state, skills, and OpenClaw routing remain shared. Openclaw Setup should therefore behave consistently even when the host operating system uses a different audio API, startup manager, or filesystem convention.
+For API-key, token, custom-provider, Ollama, and LM Studio routes, Jervis runs OpenClaw onboarding non-interactively behind the scenes.
 
-For the 7.1 reliability line, the default interaction is: wake word → **Boss?** acknowledgement → capture the full natural command → evaluate the trusted session and speaker evidence → route locally or through OpenClaw → keep the same speaker locked through the follow-up window.
+For ChatGPT/Codex or xAI OAuth, Jervis completes every local configuration choice first and then asks for the unavoidable external account authorization.
 
-## Desktop and Server behavior
+## Headless servers
 
-**Desktop mode** uses the user's normal computer audio devices. Setup enumerates available microphones and outputs and asks which ones Jervis should use. An Android phone may be selected as the microphone.
+For a Server install using ChatGPT/Codex, Jervis selects device-code authentication. You can approve the code in a browser on another computer or phone while the server remains headless.
 
-**Server mode** uses the same runtime but emphasizes persistent startup, explicit device choices, and remote-friendly diagnostics. It is suitable for a NUC, home server, workstation, or other always-on machine.
+## Provider secrets
 
-## Cross-platform notes
+Secrets are masked while typing and are not shown on the review screen.
 
-- **Linux:** managed startup uses a systemd user service where available.
-- **Windows:** per-user managed startup uses Task Scheduler.
-- **macOS:** managed startup uses launchd.
-- Desktop audio is exposed through the host PortAudio backend.
-- Android AudioSource uses ADB forwarding to a localhost TCP socket, so the Jervis-side transport is shared across all three operating systems.
+## Risk acknowledgement
 
-## Reliability rules
+OpenClaw agents can use tools and system access. Jervis requires the user to explicitly acknowledge that warning before setup can continue.
 
-1. Do not turn one noisy voice sample into an authentication loop.
-2. Keep expensive speech and speaker models lazy where practical.
-3. Bound histories, queues, caches, and stored embeddings.
-4. Repair the smallest failed component before restarting the whole runtime.
-5. Keep the local shell useful when OpenClaw or a model provider is unavailable.
-6. Treat speaker recognition as a convenience identity signal, not high-assurance security.
+## Troubleshooting
 
-## Privacy and security
+If hidden onboarding fails, Jervis reports the OpenClaw error while preserving the Jervis installation boundary. Run `openclaw doctor` for provider/Gateway diagnostics after installation.
 
-Never commit provider credentials, authentication passphrases, voiceprints, raw recordings, private dialogue, Android serial numbers, private IP addresses, or personal filesystem paths. Jervis stores authentication passphrases as PBKDF2-HMAC-SHA256 verifiers rather than plaintext. Raw microphone audio is not intended to be persisted by default.
-
-## Diagnostics
-
-Start with `jervis doctor`. For agentic-brain problems, also use `openclaw doctor`. The Control Deck timeline should show wake, identity, routing, provider, and repair events with timestamps so failures can be diagnosed without guessing.
-
-When debugging Openclaw Setup, verify configuration and selected devices before changing recognition thresholds. Threshold changes should be a last step after confirming that audio quality and session state are healthy.
-
-## Development checklist
-
-- Test the normal path.
-- Test at least one failure path.
-- Consider Windows, macOS, and Linux behavior.
-- Consider Desktop and Server modes.
-- Avoid blocking or hot-polling work in the always-on loop.
-- Avoid logging secrets or authentication text.
-- Preserve rollback and doctor behavior when setup files change.
-
-## Related pages
-
-- [Getting Started index](getting-started-index.md)
-- [Wiki Home](Home.md)
-- [Previous](getting-started-android-microphone.md)
-- [Next](getting-started-first-user.md)
+[Back to Getting Started](getting-started-index.md)
