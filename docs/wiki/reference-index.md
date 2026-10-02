@@ -1,9 +1,9 @@
 # Reference
 
-Detailed Jervis 7.1 documentation for **Reference**.
+Current Jervis **7.3** reference documentation.
 
 - [Overview](reference-overview.md)
-- [Cli](reference-cli.md)
+- [CLI](reference-cli.md)
 - [Exit Codes](reference-exit-codes.md)
 - [Config Keys](reference-config-keys.md)
 - [Database Schema](reference-database-schema.md)
@@ -17,10 +17,12 @@ Detailed Jervis 7.1 documentation for **Reference**.
 - [Dependencies](reference-dependencies.md)
 - [Release Assets](reference-release-assets.md)
 - [Version Policy](reference-version-policy.md)
-- [Supported Os](reference-supported-os.md)
+- [Supported OS](reference-supported-os.md)
 - [Supported Python](reference-supported-python.md)
 - [Android Requirements](reference-android-requirements.md)
 - [Glossary](reference-glossary.md)
-- [Faq](reference-faq.md)
+- [FAQ](reference-faq.md)
+
+7.3.1 adds benchmark and live latency observability while remaining on the 7.3 compatibility line.
 
 [Back to Wiki Home](Home.md)
