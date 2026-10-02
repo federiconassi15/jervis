@@ -1,62 +1,53 @@
 # Installer: Overview
 
-## Purpose
+Jervis ships one native installer experience across Linux, Windows, and macOS.
 
-This page covers **Overview** for the **Installer** subsystem in Jervis 7.1. The goal is to keep the feature understandable, inspectable, and portable across Windows, macOS, and Linux without splitting Jervis into separate products.
+## Bootstrap
 
-## Runtime relationship
+The public bootstrap selects the correct native asset for the current OS/architecture, downloads `SHA256SUMS`, verifies the binary, and launches the native installer.
 
-Jervis separates the always-on local shell from the OpenClaw brain. Wake detection, audio capture, session identity, local state, permissions, and diagnostics should continue operating when OpenClaw or an external model provider is unavailable. Overview must respect that failure boundary.
+Linux/macOS:
 
-The active conversation model favors continuity: once a user is strongly identified or explicitly authenticated, Jervis maintains a trusted session and refreshes it through natural follow-up turns. A single uncertain sample should produce a retry or session-assisted result, not an immediate password loop.
+    curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
 
-## Deployment behavior
+Windows PowerShell:
 
-Desktop mode integrates with the current user's normal audio devices and login session. Server mode uses the same feature set but prioritizes persistence, explicit hardware selection, and remote diagnostics. Platform adapters translate Jervis lifecycle operations into systemd, Task Scheduler, or launchd.
+    irm https://raw.githubusercontent.com/federiconassi15/jervis/main/install.ps1 | iex
 
-## Configuration
+## Installation model
 
-Configuration is validated before activation and written atomically. Avoid embedding OS paths, usernames, IP addresses, device serials, provider keys, or personal identity values into source code. Machine-specific choices belong in local configuration or state.
+The installer is transactional. It stages host changes, verifies them, and preserves rollback boundaries instead of leaving an unknown half-installed state after a failure.
 
-## Operational guidance
+The setup path covers:
 
-For Overview, prefer observable state over hidden behavior. Important transitions should emit events into the timeline, and errors should be actionable. Long-running background work should be event-driven or rate-limited so a low-resource server is not punished by idle polling.
+1. Desktop or Server deployment
+2. OpenClaw setup/authentication mode
+3. microphone and output selection
+4. owner profile and local authentication
+5. final review
+6. install + verification
 
-## Security rules
+## 7.3.1 presentation
 
-- Treat microphone data and speaker embeddings as sensitive local data.
-- Do not log spoken passwords or TUI authentication secrets.
-- Enforce permissions at the action boundary.
-- Do not assume a recognized voice is sufficient for destructive or privileged operations.
-- Keep third-party skills and agents isolated from secrets they do not need.
+The 7.3.1 hardening line introduces the Unicode-framed **Installation Control Deck** and terminal-native sound cues. This changes presentation/observability, not the transaction model.
 
-## Cross-platform behavior
+Cues use host terminal/console mechanisms only and require no media assets.
 
-The shared Python core owns semantics. OS adapters own startup and host integration only. Tests should prove that platform-specific code can be imported safely on the other operating systems without executing unavailable host commands.
+## Platform behavior
 
-## Troubleshooting flow
+- Linux startup integrates with systemd where supported.
+- Windows uses Task Scheduler for managed per-user startup.
+- macOS uses launchd.
+- Desktop and Server share the same runtime and config semantics.
 
-1. Run `jervis doctor`.
-2. Check the Control Deck timeline.
-3. Confirm the active config path and selected devices.
-4. Check service state on the current OS.
-5. If OpenClaw is involved, run `openclaw doctor`.
-6. Reproduce with sanitized logs before changing thresholds or reinstalling.
+## Security
 
-## Development checklist
-
-- Normal path tested.
-- Failure path tested.
-- No secret leakage.
-- Bounded storage and queues.
-- No unnecessary busy loop.
-- Works with missing optional provider.
-- Rollback path still valid.
-- Documentation updated when user-facing behavior changes.
+Passphrases, provider credentials, voiceprints, private dialogue, device IDs, and machine-specific private state must never be rendered into public docs/logs or committed to the repo.
 
 ## Related pages
 
 - [Installer index](installer-index.md)
-- [Wiki Home](Home.md)
-- [Previous](installer-index.md)
-- [Next](installer-blue-ui.md)
+- [Installation Control Deck](installer-blue-ui.md)
+- [Transaction Model](installer-transaction-model.md)
+- [Rollback](installer-rollback.md)
+- [Verification](installer-verification.md)
