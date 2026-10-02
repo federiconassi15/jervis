@@ -1,3 +1,3 @@
-7.1.1
-Reviewed RC commit: 4b9341e2f233aa1ec92655eafdda26707ad8e1ca
-Purpose: publish the validated cross-platform native Jervis 7.1.1 release.
+7.3.0
+Validated runtime commit: 959b7b2009a1d80d3bcd3fd704fd7962119cf3bd
+Purpose: publish the validated Jervis 7.3.0 stable release with native Rust acceleration.
