@@ -34,7 +34,7 @@ def test_installer_tui_mounts_and_mouse_navigates():
             assert clicked
             await pilot.pause()
             assert app.step == 1
-            assert app.query_one("#openclaw-setup") is not None
+            assert app.query_one("#brain-wizard") is not None
 
     asyncio.run(scenario())
 
@@ -89,11 +89,11 @@ def test_installer_arrow_navigation():
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             assert app.step == 0
-            mode = app.query_one("#mode")
-            assert mode.value == "desktop"
-            await pilot.press("right")
+            assert app.mode_choice == "desktop"
+            assert app.query_one("#mode-server").display is True
+            await pilot.click("#mode-server")
             await pilot.pause()
-            assert mode.value == "server"
+            assert app.mode_choice == "server"
 
             app.query_one("#next").focus()
             await pilot.press("right")
@@ -191,25 +191,40 @@ def test_installer_layout_survives_live_terminal_resize():
         app = JervisInstaller()
         async with app.run_test(size=(110, 34)) as pilot:
             await pilot.pause()
-            assert not app.compact_mode
-            assert not app.tiny_mode
+            assert app.query_one("#sidebar").display is True
+            assert app.query_one("#mode-server").display is True
+            assert "Deployment" in str(app.query_one("#stepbar").render())
 
-            await pilot.resize_terminal(70, 20)
+            await pilot.resize_terminal(72, 20)
             await pilot.pause()
-            assert app.compact_mode
-            assert not app.tiny_mode
+            assert app.query_one("#sidebar").display is True
             assert app.query_one("#next").region.bottom <= app.screen.size.height
 
-            await pilot.resize_terminal(42, 14)
+            await pilot.resize_terminal(50, 16)
             await pilot.pause()
-            assert app.compact_mode
-            assert app.tiny_mode
-            assert "STEP 1/6" in str(app.query_one("#stepbar").render())
+            assert app.query_one("#compact-stage").display is True
+            assert "DEPLOYMENT" in str(app.query_one("#compact-stage").render())
+            assert app.query_one("#next").region.bottom <= app.screen.size.height
 
             await pilot.resize_terminal(100, 30)
             await pilot.pause()
-            assert not app.compact_mode
-            assert not app.tiny_mode
+            assert app.query_one("#sidebar").display is True
             assert app.query_one("#next").region.bottom <= app.screen.size.height
+
+    asyncio.run(scenario())
+
+
+def test_installer_server_mode_is_first_class_visible_choice():
+    async def scenario():
+        app = JervisInstaller()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            server = app.query_one("#mode-server")
+            assert server.display is True
+            assert server.region.height > 1
+            await pilot.click("#mode-server")
+            await pilot.pause()
+            assert app.mode_choice == "server"
+            assert server.has_class("selected")
 
     asyncio.run(scenario())

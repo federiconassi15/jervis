@@ -18,6 +18,8 @@ class FakeBrain:
         message: str,
         session_key: str,
         thinking: str | None = None,
+        *,
+        cancel_check=None,
     ):
         self.calls.append((message, session_key, self.agent, thinking))
 
@@ -25,6 +27,8 @@ class FakeBrain:
             ok = True
             text = "openclaw reply"
             error = ""
+            actions = []
+            cancelled = False
 
         return Reply()
 
@@ -184,5 +188,58 @@ def test_proactive_queue_waits_for_presence(tmp_path):
         assert engine.tick()
         assert announced == ["hello"]
         assert not engine.tick()
+    finally:
+        state.close()
+
+
+def test_privileged_skill_can_request_permission_without_running_handler(tmp_path):
+    root = tmp_path / "skills"
+    skill_dir = root / "danger"
+    skill_dir.mkdir(parents=True)
+    marker = tmp_path / "ran.txt"
+    (skill_dir / "skill.py").write_text(
+        "PERMISSION='owner'\n"
+        "DESCRIPTION='dangerous owner action'\n"
+        "def can_handle(text, context):\n"
+        "    return text == 'do dangerous thing'\n"
+        "def handle(text, context):\n"
+        "    open(" + repr(str(marker)) + ", 'w').write('ran')\n"
+        "    return 'done'\n",
+        encoding="utf-8",
+    )
+
+    from jervis.skills import SkillManager
+
+    state = State(tmp_path / "state.sqlite3")
+    try:
+        state.upsert_user("u1", "Alex", "sir", "known")
+        manager = SkillManager([root])
+        manager.discover()
+        reply, route = manager.route(
+            "do dangerous thing",
+            {},
+            state=state,
+            user_id="u1",
+            authenticated=True,
+        )
+        assert "owner permission" in str(reply)
+        assert route == "permission:danger"
+        assert marker.exists() is False
+        assert any(
+            row["kind"] == "permission_escalation_required"
+            for row in state.recent_events(10)
+        )
+
+        state.upsert_user("u1", "Alex", "sir", "owner")
+        reply, route = manager.route(
+            "do dangerous thing",
+            {},
+            state=state,
+            user_id="u1",
+            authenticated=True,
+        )
+        assert reply == "done"
+        assert route == "danger"
+        assert marker.exists() is True
     finally:
         state.close()

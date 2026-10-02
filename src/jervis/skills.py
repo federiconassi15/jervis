@@ -14,6 +14,7 @@ class Skill:
     name: str
     path: Path
     handler: Callable[[str, dict[str, Any]], object]
+    matcher: Callable[[str, dict[str, Any]], object] | None = None
     permission: Permission = Permission.KNOWN_USER
     description: str = ""
 
@@ -51,10 +52,12 @@ class SkillManager:
                 handler = getattr(module, "handle", None)
                 if not callable(handler):
                     continue
+                matcher = getattr(module, "can_handle", None)
                 found[name] = Skill(
                     name=name,
                     path=path,
                     handler=handler,
+                    matcher=matcher if callable(matcher) else None,
                     permission=self._permission(
                         getattr(module, "PERMISSION", Permission.KNOWN_USER.value)
                     ),
@@ -82,6 +85,31 @@ class SkillManager:
                 skill.permission,
                 authenticated,
             ):
+                matched = False
+                if skill.matcher is not None:
+                    try:
+                        matched = bool(skill.matcher(text, context))
+                    except Exception as exc:
+                        state.event(
+                            "skill_matcher_error",
+                            skill.name + ": " + str(exc),
+                        )
+                if matched:
+                    state.event(
+                        "permission_escalation_required",
+                        "skill="
+                        + skill.name
+                        + " permission="
+                        + skill.permission.value
+                        + " user="
+                        + str(user_id or "unknown"),
+                    )
+                    return (
+                        "That action requires "
+                        + skill.permission.value.replace("-", " ")
+                        + " permission before I can run it.",
+                        "permission:" + skill.name,
+                    )
                 continue
             try:
                 result = skill.handler(text, context)

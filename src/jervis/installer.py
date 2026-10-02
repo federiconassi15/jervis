@@ -98,107 +98,162 @@ class JervisInstaller(App[int]):
 
     CSS = """
     Screen {
-        background: #02070d;
-        color: #d8eef8;
+        background: #090d12;
+        color: #e6edf3;
         overflow: hidden;
     }
 
     #frame {
         width: 100%;
-        max-width: 108;
         height: 100%;
-        margin: 0;
-        background: #050d14;
-        padding: 0 2;
+        background: #090d12;
     }
 
-    #topline {
-        height: 1;
-        color: #2aa8d8;
-        content-align: center middle;
-        text-overflow: ellipsis;
+    #install-shell {
+        width: 100%;
+        height: 100%;
     }
 
-    #hero-row {
-        height: 3;
+    #sidebar {
+        width: 26;
+        min-width: 22;
+        height: 100%;
+        background: #0d141b;
+        border-right: solid #26313b;
+        padding: 1 1;
     }
 
-    #hero {
-        height: 3;
-        width: 1fr;
-        content-align: center middle;
-        color: #87e4ff;
+    #brand {
+        height: 2;
+        color: #f0f6fc;
         text-style: bold;
-        text-overflow: ellipsis;
     }
 
-    #tagline {
-        height: 1;
-        content-align: center middle;
-        color: #66889a;
-        text-overflow: ellipsis;
+    #brand-sub {
+        height: 2;
+        color: #7d8b99;
+        border-bottom: solid #26313b;
+        margin-bottom: 1;
     }
 
     #stepbar {
-        height: 2;
-        content-align: center middle;
-        color: #537487;
-        border-bottom: solid #102a38;
-        text-overflow: ellipsis;
+        height: 1fr;
+        color: #8b98a5;
+        padding-top: 1;
     }
 
-    #system-line {
+    #sidebar-footer {
+        height: auto;
+        color: #62707d;
+        border-top: solid #26313b;
+        padding-top: 1;
+    }
+
+    #main-pane {
+        width: 1fr;
+        height: 100%;
+        min-width: 30;
+        padding: 1 2;
+        background: #090d12;
+    }
+
+    #compact-stage {
+        display: none;
         height: 1;
-        content-align: center middle;
-        color: #318db0;
-        margin-top: 1;
-        text-overflow: ellipsis;
+        color: #58c7ff;
+        text-style: bold;
+        margin-bottom: 1;
     }
 
     #context {
         height: auto;
-        max-height: 3;
-        min-height: 1;
-        background: #07151f;
-        color: #a5d9eb;
-        padding: 0 1;
-        margin: 1 0;
-        text-overflow: ellipsis;
+        min-height: 2;
+        max-height: 4;
+        color: #8b98a5;
+        margin-bottom: 1;
     }
 
     #pages {
+        width: 100%;
         height: 1fr;
         min-height: 1;
         overflow: hidden;
     }
 
     .page {
+        width: 100%;
         height: 100%;
-        padding: 1 1;
+        padding: 0;
         overflow-y: auto;
         scrollbar-size-vertical: 1;
     }
 
     .title {
         height: auto;
-        min-height: 1;
-        color: #d8f6ff;
+        min-height: 2;
+        color: #f0f6fc;
         text-style: bold;
         margin-bottom: 1;
-        text-overflow: ellipsis;
     }
 
     .hint {
         height: auto;
-        color: #6f8e9e;
+        color: #8b98a5;
         margin-bottom: 1;
     }
 
     .card {
         height: auto;
-        background: #07151f;
-        padding: 1 1;
+        background: #0d141b;
+        border: solid #26313b;
+        padding: 1 2;
         margin: 1 0;
+    }
+
+    .choice-row {
+        width: 100%;
+        height: auto;
+        layout: horizontal;
+        margin: 1 0;
+    }
+
+    Button.choice {
+        width: 1fr;
+        min-width: 18;
+        height: 5;
+        margin-right: 1;
+        content-align: left middle;
+        text-align: left;
+        background: #0d141b;
+        color: #d6dee6;
+        border: solid #26313b;
+        padding: 0 1;
+    }
+
+    Button.choice:hover,
+    Button.choice:focus {
+        background: #111c26;
+        border: solid #58c7ff;
+        color: #ffffff;
+    }
+
+    Button.choice.selected {
+        background: #102432;
+        border: solid #58c7ff;
+        color: #ffffff;
+        text-style: bold;
+    }
+
+    Select, Input {
+        width: 100%;
+        margin: 1 0;
+        background: #0d141b;
+        border: tall #26313b;
+    }
+
+    Select:focus, Input:focus {
+        border: tall #58c7ff;
+        background: #111c26;
     }
 
     Horizontal {
@@ -206,100 +261,68 @@ class JervisInstaller(App[int]):
         min-height: 1;
     }
 
-    Select, Input {
-        width: 100%;
-        margin: 1 0;
-        background: #06111a;
-        border: tall #173c50;
-    }
-
-    Select:focus, Input:focus {
-        border: tall #49cfff;
-        background: #071824;
-    }
-
     Switch {
         margin-left: 1;
     }
 
     Button {
-        min-width: 12;
+        min-width: 10;
         margin-right: 1;
-        background: #0b1b26;
-        color: #cbefff;
-        border: tall #173c50;
+        background: #111820;
+        color: #d6dee6;
+        border: solid #26313b;
     }
 
     Button:hover, Button:focus {
-        background: #0d2d3f;
-        border: tall #49cfff;
-        text-style: bold;
+        background: #162431;
+        border: solid #58c7ff;
+        color: #ffffff;
     }
 
     Button.-primary {
-        background: #0c658b;
-        color: white;
-        border: tall #2abde9;
+        background: #0d5f84;
+        border: solid #58c7ff;
+        color: #ffffff;
     }
 
     #nav {
-        dock: bottom;
         width: 100%;
-        height: 2;
-        padding: 0 1;
-        border-top: solid #102a38;
+        height: 4;
+        border-top: solid #26313b;
+        padding-top: 1;
         align: right middle;
-        background: #050d14;
-    }
-
-    #nav Button {
-        height: 1;
-        min-width: 8;
-        border: none;
-        padding: 0 1;
-        margin-right: 0;
     }
 
     #nav-hint {
         width: 1fr;
         min-width: 0;
-        color: #58788a;
+        color: #62707d;
         content-align: left middle;
         text-overflow: ellipsis;
     }
 
-    #pulse {
-        width: 3;
-        min-width: 3;
-        color: #52d3ff;
-        content-align: center middle;
-    }
-
     #audio-meter {
         height: auto;
-        min-height: 1;
-        color: #75dfff;
-        content-align: center middle;
-        background: #06131d;
+        min-height: 2;
+        color: #7dd3fc;
+        background: #0d141b;
+        border: solid #26313b;
+        padding: 0 1;
         margin: 1 0;
-        text-overflow: ellipsis;
     }
 
     #progress-status {
         height: auto;
-        min-height: 1;
-        color: #c3efff;
+        min-height: 2;
+        color: #d6dee6;
         text-style: bold;
-        content-align: center middle;
-        text-overflow: ellipsis;
     }
 
     #progress-detail {
         height: auto;
-        min-height: 1;
-        max-height: 5;
-        color: #6f93a5;
-        content-align: center top;
+        min-height: 2;
+        max-height: 6;
+        color: #8b98a5;
     }
 
     ProgressBar {
@@ -310,102 +333,80 @@ class JervisInstaller(App[int]):
     #done-mark, #error-mark {
         height: auto;
         min-height: 2;
-        content-align: center middle;
+        margin: 1 0;
         text-style: bold;
     }
 
-    #done-mark {
-        color: #7df0bd;
-    }
-
-    #error-mark {
-        color: #ff8ca5;
-    }
+    #done-mark { color: #75e0a7; }
+    #error-mark { color: #ff8e9f; }
 
     #review {
-        background: #07151f;
-        padding: 1 1;
-        margin: 1 0;
         height: auto;
+        background: #0d141b;
+        border: solid #26313b;
+        padding: 1 2;
+        margin: 1 0;
     }
 
-    #frame.compact {
-        padding: 0 1;
+    #frame.compact #sidebar {
+        width: 21;
+        min-width: 18;
+        padding: 1 0;
     }
 
-    #frame.compact #hero-row {
-        height: 1;
-    }
-
-    #frame.compact #hero {
-        height: 1;
-    }
-
-    #frame.compact #tagline {
+    #frame.compact #sidebar-footer {
         display: none;
     }
 
-    #frame.compact #stepbar {
-        height: 1;
-        border-bottom: none;
+    #frame.compact #main-pane {
+        padding: 1 1;
     }
 
-    #frame.compact #system-line {
+    #frame.compact Button.choice {
+        height: 4;
+    }
+
+    #frame.narrow #sidebar {
         display: none;
     }
 
-    #frame.compact #context {
-        margin: 0;
-        max-height: 1;
-        padding: 0;
-        background: #050d14;
+    #frame.narrow #compact-stage {
+        display: block;
     }
 
-    #frame.compact .page {
-        padding: 0 1;
+    #frame.narrow #main-pane {
+        padding: 1 1;
+        min-width: 1;
     }
 
-    #frame.compact .card {
-        padding: 0 1;
-        margin: 0 0 1 0;
+    #frame.narrow .choice-row {
+        layout: vertical;
     }
 
-    #frame.compact Select, #frame.compact Input {
-        margin: 0 0 1 0;
+    #frame.narrow Button.choice {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 1;
     }
 
-    #frame.compact #nav-hint {
+    #frame.short #context {
         display: none;
     }
 
-    #frame.compact #nav {
+    #frame.short #nav-hint {
+        display: none;
+    }
+
+    #frame.short #nav {
+        height: 3;
+        padding-top: 0;
         align: center middle;
-        padding: 0;
     }
 
-    #frame.tiny #hero-row,
-    #frame.tiny #tagline,
-    #frame.tiny #system-line,
-    #frame.tiny #context {
-        display: none;
-    }
-
-    #frame.tiny #topline {
-        text-align: left;
-    }
-
-    #frame.tiny #stepbar {
+    #frame.short #nav Button {
         height: 1;
-        border-bottom: none;
-        text-align: left;
-    }
-
-    #frame.tiny .page {
-        padding: 0;
-    }
-
-    #frame.tiny Button {
-        min-width: 6;
+        border: none;
+        padding: 0 1;
     }
     """
 
@@ -438,12 +439,12 @@ class JervisInstaller(App[int]):
         self.transition_ticks = 0
         self.compact_mode = False
         self.tiny_mode = False
+        self.mode_choice = "desktop"
+        self.openclaw_setup_choice = "wizard"
         self.progress_title = "Preparing…"
         self.progress_detail = ""
         self.inputs, self.outputs, self.androids = self._detect_audio()
         self.select_values = {
-            "mode": ["desktop", "server"],
-            "openclaw-setup": ["wizard", "later"],
             "microphone": [value for _label, value in self.inputs],
             "output": [value for _label, value in self.outputs],
             "honorific": ["sir", "maam"],
@@ -505,213 +506,222 @@ class JervisInstaller(App[int]):
 
     def compose(self) -> ComposeResult:
         with Container(id="frame"):
-            yield Static(
-                "┌─ SYSTEM BOOTSTRAP // JERVIS " + __version__ + " ─┐",
-                id="topline",
-            )
-            with Horizontal(id="hero-row"):
-                yield Static("◐", id="pulse")
-                yield Static(
-                    "╭──────────── J  E  R  V  I  S ────────────╮\n"
-                    "│        INSTALLATION CONTROL DECK         │\n"
-                    "╰──────────────────────────────────────────╯",
-                    id="hero",
-                )
-            yield Static("‹ " + self.tagline + " ›", id="tagline")
-            yield Static("", id="stepbar")
-            yield Static("SYSTEM CHECK · READY", id="system-line")
-            yield Static("", id="context")
-
-            with ContentSwitcher(initial="page-mode", id="pages"):
-                with VerticalScroll(classes="page", id="page-mode"):
-                    yield Static("01 // DEPLOYMENT MODE", classes="title")
+            with Horizontal(id="install-shell"):
+                with Container(id="sidebar"):
+                    yield Static("JERVIS", id="brand")
+                    yield Static("SETUP  ·  " + __version__, id="brand-sub")
+                    yield Static("", id="stepbar")
                     yield Static(
-                        "Desktop follows your normal login and audio session. "
-                        "Server is tuned for an always-on machine.",
-                        classes="hint",
-                    )
-                    yield Select(
-                        [
-                            ("Desktop · everyday PC or Mac", "desktop"),
-                            ("Server · always-on machine", "server"),
-                        ],
-                        value="desktop",
-                        allow_blank=False,
-                        id="mode",
-                    )
-                    yield Static(
-                        self._platform_summary(),
-                        classes="card",
+                        self._platform_summary() + "\n\n↑↓ move  ·  Enter select",
+                        id="sidebar-footer",
                     )
 
-                with VerticalScroll(classes="page", id="page-brain"):
-                    yield Static("02 // OPENCLAW BRAIN", classes="title")
-                    yield Static(
-                        "Jervis renders OpenClaw's own live setup wizard. "
-                        "Providers, API keys, plugins, channels, search, skills, "
-                        "Gateway and daemon prompts stay inside Jervis.",
-                        classes="hint",
-                    )
-                    yield Static(
-                        (
-                            "● OpenClaw detected: " + str(self.openclaw)
-                            if self.openclaw
-                            else "○ OpenClaw will be installed quietly during setup"
-                        ),
-                        classes="card",
-                        id="openclaw-status",
-                    )
-                    yield Select(
-                        [
-                            (
-                                "Full OpenClaw guided setup · all current/future providers",
-                                "wizard",
-                            ),
-                            ("Configure OpenClaw later", "later"),
-                        ],
-                        value="wizard",
-                        allow_blank=False,
-                        id="openclaw-setup",
-                    )
-                    with Horizontal(classes="card"):
-                        yield Label("Install OpenClaw automatically if missing")
-                        yield Switch(value=True, id="openclaw-install")
-                    yield Static(
-                        "No provider list is hard-coded in Jervis. The installed "
-                        "OpenClaw version supplies every setup question at runtime.",
-                        classes="hint",
-                    )
+                with Container(id="main-pane"):
+                    yield Static("", id="compact-stage")
+                    yield Static("", id="context")
 
-                with VerticalScroll(classes="page", id="page-audio"):
-                    yield Static("03 // AUDIO MATRIX", classes="title")
-                    yield Static(
-                        "Pick the microphone and output Jervis should own.",
-                        classes="hint",
-                    )
-                    yield Label("Microphone")
-                    yield Select(
-                        self.inputs,
-                        prompt="Choose a microphone",
-                        allow_blank=True,
-                        id="microphone",
-                    )
-                    yield Label("Speakers / output")
-                    yield Select(
-                        self.outputs,
-                        prompt="Choose an output",
-                        allow_blank=True,
-                        id="output",
-                    )
-                    with Horizontal():
-                        yield Button("Test microphone", id="test-mic")
-                        yield Button("Test speakers", id="test-output")
-                    yield Static("MIC LEVEL  ·  not tested", id="audio-meter")
-                    with Horizontal(classes="card"):
-                        yield Label("Start Jervis automatically")
-                        yield Switch(value=True, id="autostart")
+                    with ContentSwitcher(initial="page-mode", id="pages"):
+                        with VerticalScroll(classes="page", id="page-mode"):
+                            yield Static("Where should Jervis live?", classes="title")
+                            yield Static(
+                                "Choose the environment Jervis should optimize itself for. "
+                                "Both options use the same runtime.",
+                                classes="hint",
+                            )
+                            with Container(classes="choice-row"):
+                                yield Button(
+                                    "Desktop\nEveryday PC or Mac\nUses your normal login and audio session",
+                                    id="mode-desktop",
+                                    classes="choice selected",
+                                )
+                                yield Button(
+                                    "Server\nAlways-on machine / NUC\nPersistent startup and headless-friendly behaviour",
+                                    id="mode-server",
+                                    classes="choice",
+                                )
+                            yield Static(
+                                "Nothing is installed until the Review page.",
+                                classes="hint",
+                            )
 
-                with VerticalScroll(classes="page", id="page-identity"):
-                    yield Static("04 // IDENTITY CORE", classes="title")
-                    yield Static(
-                        "Your local owner profile controls identity, permissions, and authentication.",
-                        classes="hint",
-                    )
-                    yield Input(placeholder="Your name", id="owner-name")
-                    yield Select(
-                        [("Sir", "sir"), ("Ma'am", "maam")],
-                        value="sir",
-                        allow_blank=False,
-                        id="honorific",
-                    )
-                    yield Input(
-                        placeholder="Jervis authentication passphrase",
-                        password=True,
-                        id="passphrase",
-                    )
-                    yield Input(
-                        placeholder="Confirm passphrase",
-                        password=True,
-                        id="passphrase-confirm",
-                    )
-                    yield Static(
-                        "The passphrase is never displayed in the review screen or normal logs.",
-                        classes="hint",
-                    )
+                        with VerticalScroll(classes="page", id="page-brain"):
+                            yield Static("Connect the OpenClaw brain", classes="title")
+                            yield Static(
+                                "Jervis can render OpenClaw's own live setup flow without "
+                                "hard-coding providers or API choices.",
+                                classes="hint",
+                            )
+                            yield Static(
+                                (
+                                    "OpenClaw detected  ·  " + str(self.openclaw)
+                                    if self.openclaw
+                                    else "OpenClaw is not installed yet"
+                                ),
+                                classes="card",
+                                id="openclaw-status",
+                            )
+                            with Container(classes="choice-row"):
+                                yield Button(
+                                    "Guided setup\nRecommended\nUse OpenClaw's live provider/API wizard",
+                                    id="brain-wizard",
+                                    classes="choice selected",
+                                )
+                                yield Button(
+                                    "Configure later\nSkip brain setup for now\nLocal Jervis features still install",
+                                    id="brain-later",
+                                    classes="choice",
+                                )
+                            with Horizontal(classes="card"):
+                                yield Label("Install OpenClaw automatically if missing")
+                                yield Switch(value=True, id="openclaw-install")
 
-                with VerticalScroll(classes="page", id="page-review"):
-                    yield Static("05 // FINAL REVIEW", classes="title")
-                    yield Static("", id="review")
-                    yield Static(
-                        "Nothing is committed until the transactional install reaches its final checks.",
-                        classes="hint",
-                    )
+                        with VerticalScroll(classes="page", id="page-audio"):
+                            yield Static("Choose Jervis audio", classes="title")
+                            yield Static(
+                                "Select the microphone and output Jervis should use.",
+                                classes="hint",
+                            )
+                            yield Label("Microphone")
+                            yield Select(
+                                self.inputs,
+                                prompt="Choose a microphone",
+                                allow_blank=True,
+                                id="microphone",
+                            )
+                            yield Label("Speakers / output")
+                            yield Select(
+                                self.outputs,
+                                prompt="Choose an output",
+                                allow_blank=True,
+                                id="output",
+                            )
+                            with Horizontal():
+                                yield Button("Test microphone", id="test-mic")
+                                yield Button("Test speakers", id="test-output")
+                            yield Static("MIC LEVEL  ·  not tested", id="audio-meter")
+                            with Horizontal(classes="card"):
+                                yield Label("Start Jervis automatically")
+                                yield Switch(value=True, id="autostart")
 
-                with VerticalScroll(classes="page", id="page-install"):
-                    yield Static("06 // INSTALLATION SEQUENCE", classes="title")
-                    yield LoadingIndicator()
-                    yield Static("Preparing…", id="progress-status")
-                    yield Static("", id="progress-detail")
-                    yield ProgressBar(total=TOTAL_STEPS, show_eta=False, id="progress")
-                    yield Static("", id="error-mark")
+                        with VerticalScroll(classes="page", id="page-identity"):
+                            yield Static("Create the local owner", classes="title")
+                            yield Static(
+                                "Identity, permissions and trusted sessions stay local to Jervis.",
+                                classes="hint",
+                            )
+                            yield Input(placeholder="Your name", id="owner-name")
+                            yield Select(
+                                [("Sir", "sir"), ("Ma'am", "maam")],
+                                value="sir",
+                                allow_blank=False,
+                                id="honorific",
+                            )
+                            yield Input(
+                                placeholder="Jervis authentication passphrase",
+                                password=True,
+                                id="passphrase",
+                            )
+                            yield Input(
+                                placeholder="Confirm passphrase",
+                                password=True,
+                                id="passphrase-confirm",
+                            )
+                            yield Static(
+                                "The passphrase is never shown in Review or normal logs.",
+                                classes="hint",
+                            )
 
-                    yield Static("", id="openclaw-wizard-title", classes="title", markup=False)
-                    yield Static("", id="openclaw-wizard-message", classes="card", markup=False)
-                    yield Static("", id="openclaw-wizard-options", classes="hint", markup=False)
-                    yield Select(
-                        [("Waiting for OpenClaw…", "0")],
-                        allow_blank=True,
-                        id="openclaw-wizard-select",
-                    )
-                    yield Input(id="openclaw-wizard-input")
-                    with Horizontal(classes="card", id="openclaw-wizard-confirm-row"):
-                        yield Label("Confirm")
-                        yield Switch(value=False, id="openclaw-wizard-confirm")
-                    yield Button(
-                        "Continue",
-                        id="openclaw-wizard-next",
-                        variant="primary",
-                    )
+                        with VerticalScroll(classes="page", id="page-review"):
+                            yield Static("Review before Jervis changes anything", classes="title")
+                            yield Static("", id="review")
+                            yield Static(
+                                "The install engine is transactional and keeps rollback boundaries.",
+                                classes="hint",
+                            )
 
-                    yield Static("", id="done-mark")
-                    yield Button(
-                        "Retry OpenClaw setup",
-                        id="auth-button",
-                        variant="primary",
-                    )
-                    yield Button("Finish", id="finish-button", variant="primary")
+                        with VerticalScroll(classes="page", id="page-install"):
+                            yield Static("Installing Jervis", classes="title")
+                            yield LoadingIndicator()
+                            yield Static("Preparing…", id="progress-status")
+                            yield Static("", id="progress-detail")
+                            yield ProgressBar(
+                                total=TOTAL_STEPS,
+                                show_eta=False,
+                                id="progress",
+                            )
+                            yield Static("", id="error-mark")
 
-            with Horizontal(id="nav"):
-                yield Static("└─ ↑↓ MOVE · ←→ NAVIGATE · ENTER SELECT · MOUSE ONLINE ─", id="nav-hint")
-                yield Button("Back", id="back")
-                yield Button("Next", id="next", variant="primary")
+                            yield Static(
+                                "",
+                                id="openclaw-wizard-title",
+                                classes="title",
+                                markup=False,
+                            )
+                            yield Static(
+                                "",
+                                id="openclaw-wizard-message",
+                                classes="card",
+                                markup=False,
+                            )
+                            yield Static(
+                                "",
+                                id="openclaw-wizard-options",
+                                classes="hint",
+                                markup=False,
+                            )
+                            yield Select(
+                                [("Waiting for OpenClaw…", "0")],
+                                allow_blank=True,
+                                id="openclaw-wizard-select",
+                            )
+                            yield Input(id="openclaw-wizard-input")
+                            with Horizontal(
+                                classes="card",
+                                id="openclaw-wizard-confirm-row",
+                            ):
+                                yield Label("Confirm")
+                                yield Switch(
+                                    value=False,
+                                    id="openclaw-wizard-confirm",
+                                )
+                            yield Button(
+                                "Continue",
+                                id="openclaw-wizard-next",
+                                variant="primary",
+                            )
+
+                            yield Static("", id="done-mark")
+                            yield Button(
+                                "Retry OpenClaw setup",
+                                id="auth-button",
+                                variant="primary",
+                            )
+                            yield Button(
+                                "Finish",
+                                id="finish-button",
+                                variant="primary",
+                            )
+
+                    with Horizontal(id="nav"):
+                        yield Static(
+                            "↑↓ move  ·  Enter select  ·  Tab next field",
+                            id="nav-hint",
+                        )
+                        yield Button("Back", id="back")
+                        yield Button("Next", id="next", variant="primary")
 
     def _apply_responsive_layout(self, width: int, height: int) -> None:
         if not self.is_mounted:
             return
         frame = self.query_one("#frame", Container)
-        compact = width < 76 or height < 24
-        tiny = width < 48 or height < 16
+        compact = width < 86
+        narrow = width < 58
+        short = height < 20
         self.compact_mode = compact
-        self.tiny_mode = tiny
+        self.tiny_mode = narrow
         frame.set_class(compact, "compact")
-        frame.set_class(tiny, "tiny")
-
-        top = self.query_one("#topline", Static)
-        top.update(
-            "JERVIS " + __version__ + " // INSTALL"
-            if tiny
-            else "┌─ SYSTEM BOOTSTRAP // JERVIS " + __version__ + " ─┐"
-        )
-
-        hero = self.query_one("#hero", Static)
-        if compact:
-            hero.update("JERVIS // INSTALLATION CONTROL DECK")
-        else:
-            hero.update(
-                "╭──────────── J  E  R  V  I  S ────────────╮\n"
-                "│        INSTALLATION CONTROL DECK         │\n"
-                "╰──────────────────────────────────────────╯"
-            )
+        frame.set_class(narrow, "narrow")
+        frame.set_class(short, "short")
         self._render_stepbar()
 
     def on_resize(self, event: events.Resize) -> None:
@@ -719,14 +729,15 @@ class JervisInstaller(App[int]):
 
     def on_mount(self) -> None:
         _terminal_cue("boot")
-        self._apply_responsive_layout(self.size.width, self.size.height)
         self.query_one("#auth-button", Button).display = False
         self.query_one("#finish-button", Button).display = False
         self._hide_openclaw_wizard_controls()
-        self.set_interval(0.12, self._pulse_tick)
+        self._apply_responsive_layout(self.size.width, self.size.height)
+        self._select_mode("desktop")
+        self._select_brain_setup("wizard")
         self._render_stepbar()
         self._refresh_context()
-        self.query_one("#mode", Select).focus()
+        self.query_one("#mode-desktop", Button).focus()
 
     def _hide_openclaw_wizard_controls(self) -> None:
         for selector in (
@@ -758,54 +769,8 @@ class JervisInstaller(App[int]):
                 pass
 
     def _pulse_tick(self) -> None:
-        # Textual may deliver one final timer tick while the test/app screen is
-        # being torn down. Treat that as normal lifecycle cleanup rather than
-        # querying widgets that no longer exist.
-        try:
-            pulse = self.query_one("#pulse", Static)
-            hero_widget = self.query_one("#hero", Static)
-        except NoMatches:
-            return
-
-        self.animation_tick += 1
-        self.pulse_index = (self.pulse_index + 1) % len(self.pulse_frames)
-        pulse.update(self.pulse_frames[self.pulse_index])
-
-        if self.compact_mode:
-            hero_widget.update("JERVIS // INSTALLATION CONTROL DECK")
-        else:
-            hero = self.hero_frames[(self.animation_tick // 2) % len(self.hero_frames)]
-            hero_widget.update(
-                hero
-                + "\n│        INSTALLATION CONTROL DECK         │"
-                + "\n╰──────────────────────────────────────────╯"
-            )
-
-        scan = self.scan_frames[self.animation_tick % len(self.scan_frames)]
-        if self.transition_ticks > 0:
-            self.transition_ticks -= 1
-            self.query_one("#system-line", Static).update(
-                "├─ " + scan + "  switching subsystem ─┤"
-            )
-        elif self.step == 5 and not self.core_installed:
-            self.query_one("#system-line", Static).update(
-                "├─ " + scan + "  installation sequence active ─┤"
-            )
-            self.query_one("#progress-status", Static).update(
-                scan + "  " + self.progress_title
-            )
-        elif self.core_installed:
-            self.query_one("#system-line", Static).update(
-                "╰─ ●  installation verified // systems nominal ─╯"
-            )
-        else:
-            self.query_one("#system-line", Static).update(
-                "├─ " + scan + "  systems ready ─┤"
-            )
-
-        if self.animation_tick % 80 == 0 and self.step < 5:
-            self.tagline = random.choice(BANTER)
-            self.query_one("#tagline", Static).update("‹ " + self.tagline + " ›")
+        # 7.4 deliberately avoids an animated installer repaint loop.
+        return
 
     def _platform_summary(self) -> str:
         return (
@@ -822,39 +787,30 @@ class JervisInstaller(App[int]):
             return
 
         if self.step == 0:
-            mode = str(self.query_one("#mode", Select).value)
             text = (
-                "Desktop  ·  current-user audio  ·  starts with your login"
-                if mode == "desktop"
-                else "Server  ·  persistent startup  ·  always-on hardware"
+                "Desktop uses your normal login/audio session."
+                if self.mode_choice == "desktop"
+                else "Server is tuned for persistent startup on an always-on machine."
             )
         elif self.step == 1:
-            setup = str(self.query_one("#openclaw-setup", Select).value)
             text = (
-                "Brain  ·  OpenClaw upstream wizard · all providers/APIs"
-                if setup == "wizard"
-                else "Brain  ·  OpenClaw setup deferred"
+                "OpenClaw guided setup will run inside Jervis."
+                if self.openclaw_setup_choice == "wizard"
+                else "OpenClaw setup is deferred; local Jervis features still install."
             )
         elif self.step == 2:
             mic = self.query_one("#microphone", Select).value
             out = self.query_one("#output", Select).value
-            mic_text = "waiting for microphone" if mic is Select.NULL else str(mic)
-            out_text = "waiting for output" if out is Select.NULL else "output #" + str(out)
+            mic_text = "choose a microphone" if mic is Select.NULL else str(mic)
+            out_text = "choose an output" if out is Select.NULL else "output #" + str(out)
             text = "Audio  ·  " + mic_text + "  →  " + out_text
         elif self.step == 3:
             name = self.query_one("#owner-name", Input).value.strip() or "owner not named yet"
-            honorific = str(self.query_one("#honorific", Select).value)
-            text = (
-                "Identity  ·  "
-                + name
-                + " · address as "
-                + ("ma'am" if honorific == "maam" else "sir")
-                + " · passphrase encrypted locally"
-            )
+            text = "Identity  ·  " + name + "  ·  local authentication"
         elif self.step == 4:
-            text = "Review  ·  nothing is changed until you start installation"
+            text = "Review every choice before the transactional install begins."
         else:
-            text = "Install  ·  staged changes  ·  verification  ·  automatic rollback"
+            text = "Install  ·  snapshot  ·  apply  ·  verify  ·  rollback if needed"
 
         try:
             self.query_one("#context", Static).update(text)
@@ -864,40 +820,23 @@ class JervisInstaller(App[int]):
     def _render_stepbar(self) -> None:
         if not self.is_mounted:
             return
-        if self.tiny_mode:
-            text = (
-                "STEP "
-                + str(self.step + 1)
-                + "/"
-                + str(len(self.STEPS))
-                + " · "
-                + self.STEPS[self.step].upper()
-            )
-            self.query_one("#stepbar", Static).update(text)
-            return
-        if self.compact_mode:
-            self.query_one("#stepbar", Static).update(
-                " · ".join(
-                    (
-                        "[" + str(index + 1) + " " + name.upper() + "]"
-                        if index == self.step
-                        else str(index + 1) + " " + name.upper()
-                    )
-                    for index, name in enumerate(self.STEPS)
-                )
-            )
-            return
-
-        parts = []
-        for index, name in enumerate(self.STEPS):
-            number = str(index + 1).zfill(2)
+        labels = ["Deployment", "OpenClaw", "Audio", "Identity", "Review", "Install"]
+        lines = []
+        for index, label in enumerate(labels):
             if index < self.step:
-                parts.append("✓" + number + " " + name.upper())
+                marker = "✓"
             elif index == self.step:
-                parts.append("╢" + number + " " + name.upper() + "╟")
+                marker = "▸"
             else:
-                parts.append("·" + number + " " + name.upper())
-        self.query_one("#stepbar", Static).update(" ── ".join(parts))
+                marker = " "
+            lines.append(marker + "  " + label)
+        self.query_one("#stepbar", Static).update("\n".join(lines))
+        try:
+            self.query_one("#compact-stage", Static).update(
+                "SETUP  /  " + labels[self.step].upper()
+            )
+        except Exception:
+            pass
 
     def _switch(self, step: int) -> None:
         self.step = max(0, min(step, len(self.STEPS) - 1))
@@ -911,12 +850,11 @@ class JervisInstaller(App[int]):
         ][self.step]
         self.query_one("#back", Button).display = self.step not in {0, 5}
         self.query_one("#next", Button).display = self.step < 4
-        self.transition_ticks = 7
         self._render_stepbar()
         self._refresh_context()
         focus_targets = {
-            0: "#mode",
-            1: "#openclaw-setup",
+            0: "#mode-desktop" if self.mode_choice == "desktop" else "#mode-server",
+            1: "#brain-wizard" if self.openclaw_setup_choice == "wizard" else "#brain-later",
             2: "#microphone",
             3: "#owner-name",
         }
@@ -930,13 +868,11 @@ class JervisInstaller(App[int]):
     def _save_page(self) -> bool:
         try:
             if self.step == 0:
-                self.plan.mode = str(self.query_one("#mode", Select).value)
+                self.plan.mode = self.mode_choice
                 if self.plan.mode == "server":
                     self.query_one("#autostart", Switch).value = True
             elif self.step == 1:
-                self.plan.openclaw_setup = str(
-                    self.query_one("#openclaw-setup", Select).value
-                )
+                self.plan.openclaw_setup = self.openclaw_setup_choice
                 self.plan.install_openclaw = bool(
                     self.query_one("#openclaw-install", Switch).value
                 )
@@ -1003,6 +939,50 @@ class JervisInstaller(App[int]):
             "✓  [b]Authentication[/b] Local passphrase configured",
         ]
         self.query_one("#review", Static).update("\n".join(lines))
+
+    def _select_mode(self, value: str) -> None:
+        if value not in {"desktop", "server"}:
+            return
+        self.mode_choice = value
+        self.plan.mode = value
+        self.query_one("#mode-desktop", Button).set_class(
+            value == "desktop", "selected"
+        )
+        self.query_one("#mode-server", Button).set_class(
+            value == "server", "selected"
+        )
+        if value == "server":
+            self.query_one("#autostart", Switch).value = True
+        self._refresh_context()
+
+    def _select_brain_setup(self, value: str) -> None:
+        if value not in {"wizard", "later"}:
+            return
+        self.openclaw_setup_choice = value
+        self.plan.openclaw_setup = value
+        self.query_one("#brain-wizard", Button).set_class(
+            value == "wizard", "selected"
+        )
+        self.query_one("#brain-later", Button).set_class(
+            value == "later", "selected"
+        )
+        self._refresh_context()
+
+    @on(Button.Pressed, "#mode-desktop")
+    def mode_desktop_pressed(self) -> None:
+        self._select_mode("desktop")
+
+    @on(Button.Pressed, "#mode-server")
+    def mode_server_pressed(self) -> None:
+        self._select_mode("server")
+
+    @on(Button.Pressed, "#brain-wizard")
+    def brain_wizard_pressed(self) -> None:
+        self._select_brain_setup("wizard")
+
+    @on(Button.Pressed, "#brain-later")
+    def brain_later_pressed(self) -> None:
+        self._select_brain_setup("later")
 
     @on(Select.Changed)
     def selection_changed(self, event: Select.Changed) -> None:

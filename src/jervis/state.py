@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-STATE_SCHEMA_VERSION = 1
+STATE_SCHEMA_VERSION = 3
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -86,6 +86,70 @@ CREATE TABLE IF NOT EXISTS metrics(
   detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_metrics_name_id ON metrics(name,id DESC);
+CREATE TABLE IF NOT EXISTS session_summaries(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  started_at REAL NOT NULL,
+  ended_at REAL NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL,
+  provenance TEXT NOT NULL DEFAULT 'runtime',
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_user
+  ON session_summaries(user_id,ended_at DESC);
+CREATE TABLE IF NOT EXISTS presence_history(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  transition TEXT NOT NULL,
+  source TEXT NOT NULL,
+  confidence REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_presence_history_user
+  ON presence_history(user_id,id DESC);
+CREATE TABLE IF NOT EXISTS agent_runs(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  agent TEXT NOT NULL,
+  route TEXT NOT NULL,
+  status TEXT NOT NULL,
+  started_at REAL NOT NULL,
+  ended_at REAL,
+  detail TEXT NOT NULL DEFAULT '',
+  cancel_requested INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_user
+  ON agent_runs(user_id,id DESC);
+CREATE TABLE IF NOT EXISTS agent_actions(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+  ts REAL NOT NULL,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT '',
+  detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_run
+  ON agent_actions(run_id,id);
+CREATE TABLE IF NOT EXISTS condition_watches(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  spec TEXT NOT NULL,
+  message TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  priority INTEGER NOT NULL DEFAULT 0,
+  created_at REAL NOT NULL,
+  expires_at REAL,
+  check_interval REAL NOT NULL DEFAULT 60,
+  last_checked REAL,
+  last_value TEXT NOT NULL DEFAULT '',
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_condition_watches_active
+  ON condition_watches(active,id);
 CREATE TABLE IF NOT EXISTS kv(
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -136,6 +200,50 @@ class State:
                 + ")"
             )
         self._db.executescript(SCHEMA)
+        if current_version < 2:
+            memory_columns = {
+                str(row["name"])
+                for row in self._db.execute("PRAGMA table_info(memories)")
+            }
+            for name, declaration in (
+                ("provenance", "TEXT NOT NULL DEFAULT 'explicit'"),
+                ("importance", "REAL NOT NULL DEFAULT 0.5"),
+                ("last_accessed", "REAL"),
+                ("access_count", "INTEGER NOT NULL DEFAULT 0"),
+            ):
+                if name not in memory_columns:
+                    self._db.execute(
+                        "ALTER TABLE memories ADD COLUMN " + name + " " + declaration
+                    )
+
+            notification_columns = {
+                str(row["name"])
+                for row in self._db.execute("PRAGMA table_info(notifications)")
+            }
+            for name, declaration in (
+                ("priority", "INTEGER NOT NULL DEFAULT 0"),
+                ("expires_at", "REAL"),
+                ("not_before", "REAL"),
+                ("reason", "TEXT NOT NULL DEFAULT ''"),
+                ("attempts", "INTEGER NOT NULL DEFAULT 0"),
+                ("delivered_at", "REAL"),
+            ):
+                if name not in notification_columns:
+                    self._db.execute(
+                        "ALTER TABLE notifications ADD COLUMN " + name + " " + declaration
+                    )
+
+        if current_version < 3:
+            agent_columns = {
+                str(row["name"])
+                for row in self._db.execute("PRAGMA table_info(agent_runs)")
+            }
+            if "cancel_requested" not in agent_columns:
+                self._db.execute(
+                    "ALTER TABLE agent_runs ADD COLUMN "
+                    "cancel_requested INTEGER NOT NULL DEFAULT 0"
+                )
+
         if current_version < STATE_SCHEMA_VERSION:
             self._db.execute("PRAGMA user_version=" + str(STATE_SCHEMA_VERSION))
         self._db.commit()
@@ -314,18 +422,21 @@ class State:
         *,
         memory_limit: int = 12,
         dialogue_limit: int = 8,
+        summary_limit: int = 3,
+        query: str = "",
     ) -> dict[str, Any]:
         with self._lock:
             user = self._db.execute(
                 "SELECT * FROM users WHERE id=?",
                 (user_id,),
             ).fetchone()
-            memories = (
+            memory_candidates = (
                 list(
                     self._db.execute(
-                        "SELECT key,value,created_at,updated_at FROM memories "
+                        "SELECT key,value,created_at,updated_at,provenance,importance,"
+                        "last_accessed,access_count FROM memories "
                         "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
-                        (user_id, int(memory_limit)),
+                        (user_id, max(int(memory_limit) * 6, 24)),
                     )
                 )
                 if int(memory_limit) > 0
@@ -342,12 +453,64 @@ class State:
                 if int(dialogue_limit) > 0
                 else []
             )
+            summaries = (
+                list(
+                    self._db.execute(
+                        "SELECT started_at,ended_at,topic,summary,provenance "
+                        "FROM session_summaries WHERE user_id=? "
+                        "ORDER BY ended_at DESC LIMIT ?",
+                        (user_id, max(0, int(summary_limit))),
+                    )
+                )
+                if int(summary_limit) > 0
+                else []
+            )
             agent = self._db.execute(
                 "SELECT value FROM kv WHERE key=?",
                 ("brain.agent." + user_id,),
             ).fetchone()
 
         dialogue.reverse()
+        summaries.reverse()
+
+        terms = {
+            token
+            for token in "".join(
+                char.lower() if char.isalnum() else " " for char in query
+            ).split()
+            if len(token) > 2
+        }
+        now = time.time()
+
+        def memory_score(row) -> float:
+            value_text = str(json.loads(row["value"])).lower()
+            key_text = str(row["key"]).lower()
+            lexical = sum(
+                1.0 for term in terms if term in value_text or term in key_text
+            )
+            age_days = max(0.0, (now - float(row["updated_at"])) / 86400.0)
+            recency = 1.0 / (1.0 + age_days / 30.0)
+            importance = max(0.0, min(1.0, float(row["importance"])))
+            access = min(1.0, float(row["access_count"]) / 8.0)
+            return lexical * 3.0 + importance * 1.5 + recency + access * 0.5
+
+        ranked = sorted(
+            memory_candidates,
+            key=memory_score,
+            reverse=True,
+        )[: max(0, int(memory_limit))]
+
+        if ranked:
+            keys = [str(row["key"]) for row in ranked]
+            placeholders = ",".join("?" for _ in keys)
+            with self._lock:
+                self._db.execute(
+                    "UPDATE memories SET last_accessed=?,access_count=access_count+1 "
+                    "WHERE user_id=? AND key IN (" + placeholders + ")",
+                    (now, user_id, *keys),
+                )
+                self._db.commit()
+
         return {
             "user": user,
             "memories": [
@@ -356,10 +519,23 @@ class State:
                     "value": json.loads(row["value"]),
                     "created_at": float(row["created_at"]),
                     "updated_at": float(row["updated_at"]),
+                    "provenance": str(row["provenance"]),
+                    "importance": float(row["importance"]),
+                    "score": memory_score(row),
                 }
-                for row in memories
+                for row in ranked
             ],
             "dialogue": dialogue,
+            "summaries": [
+                {
+                    "started_at": float(row["started_at"]),
+                    "ended_at": float(row["ended_at"]),
+                    "topic": str(row["topic"]),
+                    "summary": str(row["summary"]),
+                    "provenance": str(row["provenance"]),
+                }
+                for row in summaries
+            ],
             "agent": None if agent is None else json.loads(agent["value"]),
         }
 
@@ -499,21 +675,42 @@ class State:
                 for user_id, vectors in self._embedding_cache.items()
             }
 
-    def remember(self, user_id: str, key: str, value: Any) -> None:
+    def remember(
+        self,
+        user_id: str,
+        key: str,
+        value: Any,
+        *,
+        provenance: str = "explicit",
+        importance: float = 0.5,
+    ) -> None:
         clean = key.strip()
         if not clean:
             raise ValueError("memory key cannot be empty")
         now = time.time()
+        importance = max(0.0, min(1.0, float(importance)))
         with self._lock:
             self._db.execute(
                 """
-                INSERT INTO memories(user_id,key,value,created_at,updated_at)
-                VALUES(?,?,?,?,?)
+                INSERT INTO memories(
+                  user_id,key,value,created_at,updated_at,provenance,importance
+                )
+                VALUES(?,?,?,?,?,?,?)
                 ON CONFLICT(user_id,key) DO UPDATE SET
                   value=excluded.value,
-                  updated_at=excluded.updated_at
+                  updated_at=excluded.updated_at,
+                  provenance=excluded.provenance,
+                  importance=excluded.importance
                 """,
-                (user_id, clean, self._json(value), now, now),
+                (
+                    user_id,
+                    clean,
+                    self._json(value),
+                    now,
+                    now,
+                    str(provenance)[:120],
+                    importance,
+                ),
             )
             self._db.commit()
 
@@ -529,7 +726,8 @@ class State:
         with self._lock:
             rows = list(
                 self._db.execute(
-                    "SELECT key,value,created_at,updated_at FROM memories "
+                    "SELECT key,value,created_at,updated_at,provenance,importance,"
+                    "last_accessed,access_count FROM memories "
                     "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
                     (user_id, max(1, int(limit))),
                 )
@@ -540,6 +738,12 @@ class State:
                 "value": json.loads(row["value"]),
                 "created_at": float(row["created_at"]),
                 "updated_at": float(row["updated_at"]),
+                "provenance": str(row["provenance"]),
+                "importance": float(row["importance"]),
+                "last_accessed": (
+                    None if row["last_accessed"] is None else float(row["last_accessed"])
+                ),
+                "access_count": int(row["access_count"]),
             }
             for row in rows
         ]
@@ -556,6 +760,201 @@ class State:
         with self._lock:
             self._db.execute("DELETE FROM memories WHERE user_id=?", (user_id,))
             self._db.commit()
+
+    def save_session_summary(
+        self,
+        user_id: str,
+        summary: str,
+        *,
+        started_at: float,
+        ended_at: float | None = None,
+        topic: str = "",
+        provenance: str = "runtime",
+    ) -> int:
+        clean = summary.strip()
+        if not clean:
+            raise ValueError("session summary cannot be empty")
+        end = time.time() if ended_at is None else float(ended_at)
+        with self._lock:
+            cursor = self._db.execute(
+                "INSERT INTO session_summaries("
+                "user_id,started_at,ended_at,topic,summary,provenance,created_at"
+                ") VALUES(?,?,?,?,?,?,?)",
+                (
+                    user_id,
+                    float(started_at),
+                    end,
+                    str(topic)[:240],
+                    clean[:6000],
+                    str(provenance)[:120],
+                    time.time(),
+                ),
+            )
+            self._db.commit()
+            return int(cursor.lastrowid)
+
+    def recent_session_summaries(
+        self,
+        user_id: str,
+        limit: int = 5,
+    ) -> list[sqlite3.Row]:
+        with self._lock:
+            rows = list(
+                self._db.execute(
+                    "SELECT id,started_at,ended_at,topic,summary,provenance "
+                    "FROM session_summaries WHERE user_id=? "
+                    "ORDER BY ended_at DESC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
+        rows.reverse()
+        return rows
+
+    def record_presence_transition(
+        self,
+        user_id: str,
+        transition: str,
+        source: str,
+        confidence: float,
+    ) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO presence_history(ts,user_id,transition,source,confidence) "
+                "VALUES(?,?,?,?,?)",
+                (
+                    time.time(),
+                    user_id,
+                    str(transition)[:40],
+                    str(source)[:120],
+                    float(confidence),
+                ),
+            )
+            self._db.commit()
+
+    def presence_history(self, user_id: str, limit: int = 20) -> list[sqlite3.Row]:
+        with self._lock:
+            rows = list(
+                self._db.execute(
+                    "SELECT ts,transition,source,confidence FROM presence_history "
+                    "WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
+        rows.reverse()
+        return rows
+
+    def begin_agent_run(
+        self,
+        user_id: str | None,
+        agent: str,
+        route: str,
+    ) -> int:
+        with self._lock:
+            cursor = self._db.execute(
+                "INSERT INTO agent_runs(user_id,agent,route,status,started_at) "
+                "VALUES(?,?,?,?,?)",
+                (user_id, agent, route, "running", time.time()),
+            )
+            self._db.commit()
+            return int(cursor.lastrowid)
+
+    def finish_agent_run(
+        self,
+        run_id: int,
+        status: str,
+        detail: str = "",
+    ) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE agent_runs SET status=?,ended_at=?,detail=? WHERE id=?",
+                (
+                    str(status)[:40],
+                    time.time(),
+                    str(detail)[:1000],
+                    int(run_id),
+                ),
+            )
+            self._db.commit()
+
+    def request_agent_cancel(self, run_id: int) -> bool:
+        with self._lock:
+            cursor = self._db.execute(
+                "UPDATE agent_runs SET cancel_requested=1 "
+                "WHERE id=? AND status='running'",
+                (int(run_id),),
+            )
+            self._db.commit()
+            if cursor.rowcount:
+                self._insert_event_locked(
+                    "agent_cancel_requested",
+                    "run=" + str(int(run_id)),
+                )
+                self._db.commit()
+            return bool(cursor.rowcount)
+
+    def agent_cancel_requested(self, run_id: int) -> bool:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT cancel_requested FROM agent_runs WHERE id=?",
+                (int(run_id),),
+            ).fetchone()
+        return bool(row and row["cancel_requested"])
+
+    def add_agent_action(
+        self,
+        run_id: int,
+        kind: str,
+        name: str,
+        *,
+        status: str = "",
+        detail: str = "",
+    ) -> int:
+        with self._lock:
+            cursor = self._db.execute(
+                "INSERT INTO agent_actions(run_id,ts,kind,name,status,detail) "
+                "VALUES(?,?,?,?,?,?)",
+                (
+                    int(run_id),
+                    time.time(),
+                    str(kind)[:80],
+                    str(name)[:240],
+                    str(status)[:80],
+                    str(detail)[:1000],
+                ),
+            )
+            self._db.commit()
+            return int(cursor.lastrowid)
+
+    def agent_actions(self, run_id: int, limit: int = 100) -> list[sqlite3.Row]:
+        with self._lock:
+            return list(
+                self._db.execute(
+                    "SELECT id,ts,kind,name,status,detail FROM agent_actions "
+                    "WHERE run_id=? ORDER BY id ASC LIMIT ?",
+                    (int(run_id), max(1, int(limit))),
+                )
+            )
+
+    def recent_agent_runs(
+        self,
+        user_id: str | None = None,
+        limit: int = 20,
+    ) -> list[sqlite3.Row]:
+        with self._lock:
+            if user_id is None:
+                return list(
+                    self._db.execute(
+                        "SELECT * FROM agent_runs ORDER BY id DESC LIMIT ?",
+                        (max(1, int(limit)),),
+                    )
+                )
+            return list(
+                self._db.execute(
+                    "SELECT * FROM agent_runs WHERE user_id=? "
+                    "ORDER BY id DESC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
 
     def set_presence(
         self,
@@ -602,34 +1001,240 @@ class State:
         with self._lock:
             return list(self._db.execute(query))
 
-    def notify(self, key: str, text: str, user_id: str | None = None) -> int:
+    def create_condition_watch(
+        self,
+        key: str,
+        kind: str,
+        spec: Any,
+        message: str,
+        user_id: str | None = None,
+        *,
+        reason: str = "",
+        priority: int = 10,
+        expires_at: float | None = None,
+        check_interval: float = 60.0,
+    ) -> int:
         with self._lock:
             cursor = self._db.execute(
-                "INSERT INTO notifications(ts,key,text,user_id,delivered) "
-                "VALUES(?,?,?,?,0)",
-                (time.time(), key, str(text)[:2000], user_id),
+                "INSERT INTO condition_watches("
+                "user_id,key,kind,spec,message,reason,priority,created_at,"
+                "expires_at,check_interval,last_checked,last_value,active"
+                ") VALUES(?,?,?,?,?,?,?,?,?,?,NULL,'',1)",
+                (
+                    user_id,
+                    str(key)[:240],
+                    str(kind)[:80],
+                    self._json(spec),
+                    str(message)[:2000],
+                    str(reason)[:500],
+                    int(priority),
+                    time.time(),
+                    expires_at,
+                    max(1.0, float(check_interval)),
+                ),
             )
             self._db.commit()
             return int(cursor.lastrowid)
 
-    def next_notification(self, user_id: str | None = None):
+    def due_condition_watches(
+        self,
+        *,
+        now: float | None = None,
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        stamp = time.time() if now is None else float(now)
         with self._lock:
+            return list(
+                self._db.execute(
+                    "SELECT * FROM condition_watches "
+                    "WHERE active=1 "
+                    "AND (expires_at IS NULL OR expires_at>?) "
+                    "AND (last_checked IS NULL OR last_checked+check_interval<=?) "
+                    "ORDER BY id ASC LIMIT ?",
+                    (stamp, stamp, max(1, int(limit))),
+                )
+            )
+
+    def condition_watches(
+        self,
+        user_id: str | None = None,
+        *,
+        active_only: bool = True,
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        query = "SELECT * FROM condition_watches WHERE 1=1 "
+        params: list[Any] = []
+        if active_only:
+            query += "AND active=1 "
+        if user_id is not None:
+            query += "AND (user_id IS NULL OR user_id=?) "
+            params.append(user_id)
+        query += "ORDER BY id DESC LIMIT ?"
+        params.append(max(1, int(limit)))
+        with self._lock:
+            return list(self._db.execute(query, tuple(params)))
+
+    def mark_condition_checked(
+        self,
+        watch_id: int,
+        value: Any,
+        *,
+        now: float | None = None,
+    ) -> None:
+        stamp = time.time() if now is None else float(now)
+        with self._lock:
+            self._db.execute(
+                "UPDATE condition_watches SET last_checked=?,last_value=? WHERE id=?",
+                (stamp, self._json(value), int(watch_id)),
+            )
+            self._db.commit()
+
+    def complete_condition_watch(self, watch_id: int) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE condition_watches SET active=0 WHERE id=?",
+                (int(watch_id),),
+            )
+            self._db.commit()
+
+    def cancel_condition_watch(self, watch_id: int) -> bool:
+        with self._lock:
+            cursor = self._db.execute(
+                "UPDATE condition_watches SET active=0 WHERE id=? AND active=1",
+                (int(watch_id),),
+            )
+            self._db.commit()
+            return bool(cursor.rowcount)
+
+    def expire_condition_watches(self, now: float | None = None) -> int:
+        stamp = time.time() if now is None else float(now)
+        with self._lock:
+            cursor = self._db.execute(
+                "UPDATE condition_watches SET active=0 "
+                "WHERE active=1 AND expires_at IS NOT NULL AND expires_at<=?",
+                (stamp,),
+            )
+            self._db.commit()
+            return int(cursor.rowcount)
+
+    def notify(
+        self,
+        key: str,
+        text: str,
+        user_id: str | None = None,
+        *,
+        priority: int = 0,
+        expires_at: float | None = None,
+        not_before: float | None = None,
+        reason: str = "",
+    ) -> int:
+        with self._lock:
+            cursor = self._db.execute(
+                "INSERT INTO notifications("
+                "ts,key,text,user_id,delivered,priority,expires_at,not_before,reason,attempts"
+                ") VALUES(?,?,?,?,0,?,?,?,?,0)",
+                (
+                    time.time(),
+                    key,
+                    str(text)[:2000],
+                    user_id,
+                    int(priority),
+                    expires_at,
+                    not_before,
+                    str(reason)[:500],
+                ),
+            )
+            self._db.commit()
+            return int(cursor.lastrowid)
+
+    def expire_notifications(self, now: float | None = None) -> int:
+        stamp = time.time() if now is None else float(now)
+        with self._lock:
+            cursor = self._db.execute(
+                "UPDATE notifications SET delivered=1,delivered_at=? "
+                "WHERE delivered=0 AND expires_at IS NOT NULL AND expires_at<=?",
+                (stamp, stamp),
+            )
+            self._db.commit()
+            return int(cursor.rowcount)
+
+    def next_notification(
+        self,
+        user_id: str | None = None,
+        *,
+        now: float | None = None,
+    ):
+        stamp = time.time() if now is None else float(now)
+        with self._lock:
+            base = (
+                "SELECT id,key,text,user_id,priority,expires_at,not_before,reason,attempts "
+                "FROM notifications WHERE delivered=0 "
+                "AND (expires_at IS NULL OR expires_at>?) "
+                "AND (not_before IS NULL OR not_before<=?) "
+            )
             if user_id is None:
                 return self._db.execute(
-                    "SELECT id,key,text,user_id FROM notifications "
-                    "WHERE delivered=0 ORDER BY id LIMIT 1"
+                    base + "ORDER BY priority DESC,id ASC LIMIT 1",
+                    (stamp, stamp),
                 ).fetchone()
             return self._db.execute(
-                "SELECT id,key,text,user_id FROM notifications "
-                "WHERE delivered=0 AND (user_id IS NULL OR user_id=?) "
-                "ORDER BY id LIMIT 1",
-                (user_id,),
+                base
+                + "AND (user_id IS NULL OR user_id=?) "
+                + "ORDER BY priority DESC,id ASC LIMIT 1",
+                (stamp, stamp, user_id),
             ).fetchone()
+
+    def pending_notifications(
+        self,
+        user_id: str | None = None,
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        with self._lock:
+            if user_id is None:
+                return list(
+                    self._db.execute(
+                        "SELECT id,ts,key,text,user_id,priority,expires_at,not_before,"
+                        "reason,attempts FROM notifications WHERE delivered=0 "
+                        "ORDER BY priority DESC,id ASC LIMIT ?",
+                        (max(1, int(limit)),),
+                    )
+                )
+            return list(
+                self._db.execute(
+                    "SELECT id,ts,key,text,user_id,priority,expires_at,not_before,"
+                    "reason,attempts FROM notifications WHERE delivered=0 "
+                    "AND (user_id IS NULL OR user_id=?) "
+                    "ORDER BY priority DESC,id ASC LIMIT ?",
+                    (user_id, max(1, int(limit))),
+                )
+            )
+
+    def defer_notification(
+        self,
+        notification_id: int,
+        until: float,
+    ) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE notifications SET not_before=?,attempts=attempts+1 WHERE id=?",
+                (float(until), int(notification_id)),
+            )
+            self._db.commit()
+
+    def cancel_notification(self, notification_id: int) -> bool:
+        with self._lock:
+            cursor = self._db.execute(
+                "UPDATE notifications SET delivered=1,delivered_at=? "
+                "WHERE id=? AND delivered=0",
+                (time.time(), int(notification_id)),
+            )
+            self._db.commit()
+            return bool(cursor.rowcount)
 
     def mark_notification(self, notification_id: int) -> None:
         with self._lock:
             self._db.execute(
-                "UPDATE notifications SET delivered=1 WHERE id=?",
-                (int(notification_id),),
+                "UPDATE notifications SET delivered=1,delivered_at=? WHERE id=?",
+                (time.time(), int(notification_id)),
             )
             self._db.commit()

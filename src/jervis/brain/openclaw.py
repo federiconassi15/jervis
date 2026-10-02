@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import os
 import platform
+import signal
 import subprocess
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from ..openclaw_setup import find_openclaw
 
@@ -18,6 +20,8 @@ class BrainReply:
     ok: bool
     text: str
     error: str = ""
+    actions: list[dict[str, str]] = field(default_factory=list)
+    cancelled: bool = False
 
 
 def _run_cli(
@@ -68,6 +72,94 @@ def _response_text(data: object) -> str:
                 if isinstance(text, str) and text.strip():
                     parts.append(text.strip())
     return "\n".join(parts).strip()
+
+
+def _response_actions(data: object) -> list[dict[str, str]]:
+    """Extract only action/tool metadata OpenClaw actually returned."""
+    if not isinstance(data, dict):
+        return []
+
+    candidates: list[object] = []
+    for key in ("actions", "tool_calls", "toolCalls", "events", "output"):
+        value = data.get(key)
+        if isinstance(value, list):
+            candidates.extend(value)
+
+    actions: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("type") or item.get("kind") or "").strip()
+        lowered = kind.lower()
+        if not any(token in lowered for token in ("tool", "call", "action", "function")):
+            continue
+        function = item.get("function")
+        function_name = (
+            function.get("name")
+            if isinstance(function, dict)
+            else None
+        )
+        name = str(
+            item.get("name")
+            or item.get("tool")
+            or item.get("action")
+            or function_name
+            or kind
+        ).strip()
+        status = str(item.get("status") or item.get("state") or "").strip()
+        detail = str(
+            item.get("detail")
+            or item.get("message")
+            or item.get("error")
+            or ""
+        ).strip()
+        token = (kind, name, status)
+        if not name or token in seen:
+            continue
+        seen.add(token)
+        actions.append(
+            {
+                "kind": kind or "tool",
+                "name": name,
+                "status": status,
+                "detail": detail[:1000],
+            }
+        )
+    return actions
+
+
+def _terminate_tree(worker: subprocess.Popen[str]) -> None:
+    if worker.poll() is not None:
+        return
+    if platform.system() == "Windows":
+        try:
+            subprocess.run(
+                [
+                    "taskkill",
+                    "/PID",
+                    str(worker.pid),
+                    "/T",
+                    "/F",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            return
+        except OSError:
+            pass
+    else:
+        try:
+            os.killpg(os.getpgid(worker.pid), signal.SIGTERM)
+            return
+        except (OSError, ProcessLookupError):
+            pass
+    try:
+        worker.terminate()
+    except OSError:
+        pass
 
 
 class OpenClawBrain:
@@ -171,6 +263,7 @@ class OpenClawBrain:
             bool(text),
             text,
             "" if text else "OpenClaw Gateway returned no final text",
+            actions=_response_actions(data),
         )
 
     def _ask_cli(
@@ -178,6 +271,7 @@ class OpenClawBrain:
         message: str,
         session_key: str,
         thinking: str,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> BrainReply:
         cli = self.cli
         if cli is None:
@@ -197,10 +291,76 @@ class OpenClawBrain:
             str(self.timeout),
             "--json",
         ]
-        try:
-            proc = _run_cli(cli, args, self.timeout + 10)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return BrainReply(False, "", str(exc))
+
+        if cancel_check is None:
+            try:
+                proc = _run_cli(cli, args, self.timeout + 10)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return BrainReply(False, "", str(exc))
+        else:
+            try:
+                if platform.system() == "Windows" and cli.suffix.lower() in {".cmd", ".bat"}:
+                    command = subprocess.list2cmdline([str(cli), *args])
+                    worker = subprocess.Popen(
+                        command,
+                        shell=True,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                else:
+                    worker = subprocess.Popen(
+                        [str(cli), *args],
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        start_new_session=True,
+                    )
+            except OSError as exc:
+                return BrainReply(False, "", str(exc))
+
+            deadline = time.monotonic() + self.timeout + 10
+            cancelled = False
+            timed_out = False
+            while worker.poll() is None:
+                if cancel_check():
+                    cancelled = True
+                    _terminate_tree(worker)
+                    break
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    _terminate_tree(worker)
+                    break
+                time.sleep(0.1)
+
+            try:
+                stdout, stderr = worker.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                _terminate_tree(worker)
+                try:
+                    stdout, stderr = worker.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    worker.kill()
+                    stdout, stderr = worker.communicate()
+
+            if cancelled:
+                self.last_transport = "cli"
+                return BrainReply(
+                    False,
+                    "",
+                    "OpenClaw action cancelled",
+                    cancelled=True,
+                )
+            if timed_out:
+                self.last_transport = "cli"
+                return BrainReply(False, "", "OpenClaw command timed out")
+
+            proc = subprocess.CompletedProcess(
+                [str(cli), *args],
+                int(worker.returncode or 0),
+                stdout,
+                stderr,
+            )
 
         self.last_transport = "cli"
         if proc.returncode != 0:
@@ -224,6 +384,7 @@ class OpenClawBrain:
             bool(text),
             text,
             "" if text else "OpenClaw returned no final text",
+            actions=_response_actions(data),
         )
 
     def ask(
@@ -231,18 +392,25 @@ class OpenClawBrain:
         message: str,
         session_key: str,
         thinking: str | None = None,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> BrainReply:
         selected_thinking = thinking or self.thinking
 
         # The Gateway Responses API has lower overhead than a fresh CLI process.
         # Keep deep/high reasoning on the CLI because the CLI exposes the explicit
         # --thinking control while the compatibility HTTP surface does not.
-        if selected_thinking in {"off", "minimal", "low"}:
+        if cancel_check is None and selected_thinking in {"off", "minimal", "low"}:
             reply = self._ask_http(message, session_key)
             if reply is not None:
                 return reply
 
-        return self._ask_cli(message, session_key, selected_thinking)
+        return self._ask_cli(
+            message,
+            session_key,
+            selected_thinking,
+            cancel_check=cancel_check,
+        )
 
     def doctor(self) -> tuple[bool, str]:
         cli = self.cli

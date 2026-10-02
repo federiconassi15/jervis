@@ -106,6 +106,7 @@ class Runtime:
         self.presence = PresenceManager(
             self.state,
             self.config["presence"]["timeout_seconds"],
+            self.config["presence"].get("return_window_seconds", 1800),
         )
         self.proactive = ProactiveEngine(
             self.state,
@@ -309,6 +310,57 @@ class Runtime:
             except Exception:
                 pass
 
+    def _maybe_save_session_digest(self, user_id: str) -> None:
+        rows = self.state.recent_user_dialogue(user_id, 12)
+        if len(rows) < 6:
+            return
+
+        summaries = self.state.recent_session_summaries(user_id, 1)
+        last_end = float(summaries[-1]["ended_at"]) if summaries else 0.0
+        fresh = [row for row in rows if float(row["ts"]) > last_end]
+        if len(fresh) < 6:
+            return
+
+        requests = [
+            str(row["text"]).strip()
+            for row in fresh
+            if str(row["role"]).lower() != "jervis"
+        ][-4:]
+        replies = [
+            str(row["text"]).strip()
+            for row in fresh
+            if str(row["role"]).lower() == "jervis"
+        ][-3:]
+        if not requests:
+            return
+
+        def compact(items: list[str], limit: int) -> str:
+            cleaned = []
+            for item in items:
+                first = item.replace("\n", " ").strip()
+                if len(first) > 180:
+                    first = first[:177].rstrip() + "..."
+                if first:
+                    cleaned.append(first)
+            return " | ".join(cleaned)[:limit]
+
+        digest = "Requests: " + compact(requests, 700)
+        if replies:
+            digest += "\nResponses: " + compact(replies, 500)
+
+        self.state.save_session_summary(
+            user_id,
+            digest,
+            started_at=float(fresh[0]["ts"]),
+            ended_at=float(fresh[-1]["ts"]),
+            topic=requests[0][:120],
+            provenance="runtime:extractive",
+        )
+        self.state.event(
+            "continuity_summary",
+            "user=" + user_id + " turns=" + str(len(fresh)),
+        )
+
     def respond(
         self,
         text: str,
@@ -346,6 +398,7 @@ class Runtime:
                 "My OpenClaw brain is unavailable, but I am still running locally.",
                 user_id,
             )
+        self._maybe_save_session_digest(user_id)
 
     def _consume_tui_grant(self) -> str | None:
         grant = self.state.pop_kv("auth.tui_grant")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -20,10 +21,13 @@ from .fast import NATIVE_AVAILABLE, backend_name
 from .installer import install
 from .openclaw_compat import check_openclaw_compatibility
 from .permissions_audit import audit_permissions
+from .paths import Paths
+from .presence import PresenceManager
 from .repair import render_repair_center, repair
 from .runtime import Runtime
 from .snapshots import create_snapshot, list_snapshots, restore_snapshot
 from .status import collect_status, render_status
+from .state import State
 from .tui import run as run_tui
 from .uninstall import uninstall
 from .updater import apply_update, check as check_update, rollback_update
@@ -119,6 +123,25 @@ def main(argv=None) -> None:
     openclaw_parser = subparsers.add_parser("openclaw-compat")
     openclaw_parser.add_argument("--json", action="store_true", dest="as_json")
 
+    presence_parser = subparsers.add_parser(
+        "presence",
+        help="Read or update Jervis presence from room/device integrations.",
+    )
+    presence_sub = presence_parser.add_subparsers(
+        dest="presence_command",
+        required=True,
+    )
+    presence_set = presence_sub.add_parser("set")
+    presence_set.add_argument("user")
+    presence_set.add_argument("state", choices=("present", "away"))
+    presence_set.add_argument("--source", default="external:cli")
+    presence_set.add_argument("--confidence", type=float, default=1.0)
+    presence_list = presence_sub.add_parser("list")
+    presence_list.add_argument("--json", action="store_true", dest="as_json")
+    presence_history = presence_sub.add_parser("history")
+    presence_history.add_argument("user")
+    presence_history.add_argument("--json", action="store_true", dest="as_json")
+
     args = parser.parse_args(argv)
     command = args.command or "tui"
 
@@ -210,6 +233,78 @@ def main(argv=None) -> None:
         report = check_openclaw_compatibility()
         print(json.dumps(asdict(report), indent=2))
         raise SystemExit(0 if report.installed and report.wizard_rpc else 1)
+    elif command == "presence":
+        paths = Paths.resolve()
+        paths.ensure()
+        state = State(paths.data / "jervis.sqlite3")
+        try:
+            if args.presence_command == "list":
+                rows = [dict(row) for row in state.presence()]
+                if args.as_json:
+                    print(json.dumps(rows, indent=2))
+                elif not rows:
+                    print("No presence records yet.")
+                else:
+                    for row in rows:
+                        print(
+                            ("present" if row["present"] else "away")
+                            + "  "
+                            + str(row["name"])
+                            + "  source="
+                            + str(row["source"])
+                            + "  confidence="
+                            + format(float(row["confidence"]), ".2f")
+                        )
+            else:
+                user = state.user(args.user) or state.user_by_name(args.user)
+                if user is None:
+                    print("Unknown Jervis user: " + args.user)
+                    raise SystemExit(1)
+                user_id = str(user["id"])
+                if args.presence_command == "history":
+                    rows = [
+                        dict(row)
+                        for row in state.presence_history(user_id, 50)
+                    ]
+                    if args.as_json:
+                        print(json.dumps(rows, indent=2))
+                    elif not rows:
+                        print("No presence history for " + str(user["name"]) + ".")
+                    else:
+                        for row in rows:
+                            print(
+                                time.strftime(
+                                    "%Y-%m-%d %H:%M:%S",
+                                    time.localtime(float(row["ts"])),
+                                )
+                                + "  "
+                                + str(row["transition"])
+                                + "  source="
+                                + str(row["source"])
+                            )
+                else:
+                    manager = PresenceManager(state)
+                    confidence = max(0.0, min(1.0, float(args.confidence)))
+                    if args.state == "present":
+                        manager.seen(
+                            user_id,
+                            str(args.source),
+                            confidence,
+                        )
+                    else:
+                        manager.left(
+                            user_id,
+                            str(args.source),
+                        )
+                    print(
+                        str(user["name"])
+                        + " -> "
+                        + args.state
+                        + " via "
+                        + str(args.source)
+                    )
+        finally:
+            state.close()
 
 
 if __name__ == "__main__":

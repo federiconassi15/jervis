@@ -81,14 +81,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_dialogue_rows": 2000,
         "max_event_rows": 5000,
     },
+    "continuity": {
+        "session_summary_items": 3,
+        "correction_context_turns": 6,
+        "memory_half_life_days": 30,
+    },
     "presence": {
         "enabled": True,
         "timeout_seconds": 300,
+        "return_window_seconds": 1800,
     },
     "proactive": {
         "enabled": True,
         "quiet_hours_start": "23:00",
         "quiet_hours_end": "07:00",
+        "default_ttl_seconds": 86400,
+        "defer_seconds": 300,
     },
     "recovery": {
         "auto_snapshot": True,
@@ -130,6 +138,16 @@ def validate(config) -> None:
     presence = config["presence"]
     if int(presence["timeout_seconds"]) < 30:
         raise ValueError("presence.timeout_seconds must be at least 30")
+    if int(presence["return_window_seconds"]) < int(presence["timeout_seconds"]):
+        raise ValueError(
+            "presence.return_window_seconds must be >= presence.timeout_seconds"
+        )
+
+    continuity = config["continuity"]
+    if int(continuity["session_summary_items"]) < 0:
+        raise ValueError("continuity.session_summary_items cannot be negative")
+    if int(continuity["correction_context_turns"]) < 1:
+        raise ValueError("continuity.correction_context_turns must be at least 1")
 
     identity = config["identity"]
     strong = float(identity["strong_threshold"])

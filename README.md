@@ -2,7 +2,7 @@
 
 > A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis 7.3.5 is a low-latency, rollback-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
+Jervis 7.4.0 is a low-latency, continuity-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
 ## Install
 
@@ -116,6 +116,22 @@ Jervis identifies from the longer natural command rather than trying to authenti
     jervis runtime-info
     jervis benchmark
     jervis benchmark --json
+
+## 7.4 “Feels Alive”
+
+7.4 rebuilds the installer and Control Deck around a stable sidebar layout, then adds continuity, presence, proactive behavior, and observable agent orchestration on top of the 7.3 recovery/runtime foundation.
+
+- visible Desktop/Server installer choices with no numbered horizontal rail,
+- query-aware memory with provenance, importance, and deletion/edit controls,
+- rolling local session summaries and correction-aware context,
+- entered/left/returned presence plus active-speaker handoff,
+- external room/device presence through `jervis presence`,
+- prioritized/expiring proactive queue, reminders, busy windows, and local condition watches,
+- agent capability/run/action history with real cancellation for long-running CLI-backed work,
+- explicit permission escalation for privileged skills that provide a safe matcher,
+- Control Deck health, performance, memory, presence, proactive, agent, and recovery views.
+
+See [7.4.0 release notes](docs/releases/7.4.0.md).
 
 ## 7.3.5 resilience + rollback
 

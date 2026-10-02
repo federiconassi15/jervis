@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-CURRENT_CONFIG_SCHEMA = 2
+CURRENT_CONFIG_SCHEMA = 3
 
 
 def migrate_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -21,6 +21,20 @@ def migrate_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
             schema = 2
             migrated["schema"] = schema
             changes.append("config schema 1 -> 2: recovery defaults")
+            continue
+        if schema == 2:
+            migrated.setdefault("continuity", {})
+            migrated["continuity"].setdefault("session_summary_items", 3)
+            migrated["continuity"].setdefault("correction_context_turns", 6)
+            migrated["continuity"].setdefault("memory_half_life_days", 30)
+            migrated.setdefault("presence", {})
+            migrated["presence"].setdefault("return_window_seconds", 1800)
+            migrated.setdefault("proactive", {})
+            migrated["proactive"].setdefault("default_ttl_seconds", 86400)
+            migrated["proactive"].setdefault("defer_seconds", 300)
+            schema = 3
+            migrated["schema"] = schema
+            changes.append("config schema 2 -> 3: 7.4 continuity and presence defaults")
             continue
         raise RuntimeError("no migration path for config schema " + str(schema))
 

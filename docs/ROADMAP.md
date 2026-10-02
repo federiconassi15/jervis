@@ -33,9 +33,9 @@ Shipped:
 - bounded brain context instead of replaying redundant local dialogue
 - runtime backend visibility via `jervis runtime-info`
 
-## Now — Jervis 7.3.x Hardening
+## Shipped — Jervis 7.3.x Hardening
 
-**Status: 7.3.5 resilience pass in progress**
+**Status: completed through 7.3.6**
 
 Before adding another large feature layer, 7.3 must be dogfooded as the public product.
 
@@ -81,9 +81,25 @@ Before 7.4, the 7.3 line gains a dedicated recovery layer:
 
 The purpose of 7.3.5 is not feature expansion; it is to make 7.4 safer to build and easier to recover when experiments go wrong.
 
-## Next — Jervis 7.4 “Feels Alive”
+## Now — Jervis 7.4 “Feels Alive”
+
+**Status: active development on `build/jervis-7.4.0-feels-alive`**
 
 Primary goal: make Jervis feel continuous, aware, and contextually present **without pretending to be sentient**.
+
+### Installer rebuild
+
+7.4 replaces the 7.3 Installation Control Deck UI rather than continuing to patch it:
+
+- persistent left-hand setup sidebar on normal terminal sizes
+- active setup content in a dedicated right-hand pane
+- Desktop and Server are first-class visible choices, not a dropdown
+- no animated ASCII hero or constantly repainting decorative shell
+- no horizontal numbered step rail
+- narrow terminals collapse the sidebar into one compact current-stage label
+- installation pages remain scrollable without hiding navigation
+- OpenClaw's upstream wizard remains the source of provider/API setup data
+- transactional install, snapshots, rollback, diagnostics and recovery remain underneath the new UI
 
 ### Continuity
 
