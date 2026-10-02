@@ -117,9 +117,21 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import hashlib
+          import shutil
           import zipfile
 
           root = Path("release")
+          dist = root / "dist"
+          if dist.is_dir():
+              for path in dist.iterdir():
+                  if path.is_file():
+                      target = root / path.name
+                      if target.exists():
+                          raise SystemExit("Duplicate release asset: " + path.name)
+                      shutil.move(str(path), str(target))
+              shutil.rmtree(dist)
+
           names = [
               "jervis-linux-x64",
               "jervis-linux-arm64",
@@ -137,9 +149,16 @@ jobs:
                   if not path.exists():
                       raise SystemExit("Missing release asset: " + name)
                   bundle.write(path, name)
+
+          files = sorted(
+              path for path in root.iterdir()
+              if path.is_file() and path.name != "SHA256SUMS"
+          )
+          with (root / "SHA256SUMS").open("w", encoding="utf-8") as sums:
+              for path in files:
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  sums.write(digest + "  " + path.name + "\n")
           PY
-          cd release
-          sha256sum * > SHA256SUMS
       - name: Publish stable release
         uses: softprops/action-gh-release@v2
         with:
