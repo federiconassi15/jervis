@@ -1,54 +1,33 @@
-# Operations: Restore
+# Operations: Restore & Rollback
 
-## Scope
+Jervis 7.3.5 treats rollback as a first-class maintenance operation.
 
-This page is the Jervis 7.1 reference for **Restore** within **Operations**. Jervis is designed as one cross-platform assistant rather than three loosely related ports, so feature behavior is defined by the shared core and translated to each host only where the operating system genuinely differs.
+## List recovery points
 
-## Expected behavior
+    jervis snapshot list
 
-Restore should preserve the Jervis reliability contract: local voice, state, and diagnostics remain available even if the OpenClaw brain, network, model provider, or an optional skill is unavailable. Errors should be visible and recoverable rather than silently wedging the runtime.
+## Restore a snapshot
 
-Trusted conversation sessions are central to 7.1. A user who has already been confidently recognized or authenticated should remain associated with the conversation while activity continues. Speaker confidence can reinforce the session, but an isolated weak sample does not force immediate reauthentication.
+    jervis snapshot restore <snapshot-id>
 
-## Platform parity
+Before applying a restore, Jervis creates a `pre-rollback-guard` snapshot unless an internal recovery path explicitly disables the extra guard.
 
-Linux, Windows, and macOS use the same configuration schema and identity/state model. Host differences are limited to service startup, audio-host APIs, paths, and prerequisite installation. Android AudioSource input is transported by ADB forwarding and feeds the same capture abstraction.
+Managed startup is stopped during state replacement and restarted afterward when it was previously installed.
 
-## Server and Desktop
+## What is restored
 
-Desktop mode is optimized for the user's normal speakers, microphone, login session, and changing peripherals. Server mode is optimized for persistent startup and explicit hardware. Both modes expose the same Jervis commands, identity logic, OpenClaw routing, Control Deck concepts, and update policy.
+Snapshots restore Jervis-owned mutable configuration and data. Live SQLite state is captured with SQLite's backup API.
 
-## Maintenance
+Re-downloadable model/tool caches are preserved in place instead of being rolled backward with user state.
 
-Jervis automated maintenance stays on the current major/minor line. A 7.1.x build may move to a newer 7.1.x patch after validation, but automation must not turn it into 7.2 or 8. External dependency changes should be adapted and tested before pins are updated.
+## Binary rollback
 
-## Security and privacy
+Snapshots created for native updates can include the executable. Windows schedules binary replacement after process exit; POSIX native builds can atomically replace the executable while it is running.
 
-Speaker recognition is not strong biometric authentication. Sensitive actions should require appropriate permission and, when necessary, explicit authentication. Logs and examples must not contain API keys, passphrases, voiceprints, private transcripts, device serials, or personal machine details.
+## Backup restore
 
-## Resource expectations
+    jervis backup restore <file>
 
-Jervis targets modest always-on hardware as well as modern desktops. Avoid repeated subprocess launches, hot polling, unbounded history, or eagerly loading expensive speech models. The idle path should remain boring and cheap.
+Backup restore first creates a separate pre-restore snapshot.
 
-## Diagnostics
-
-Use this order when investigating Restore:
-
-1. `jervis doctor`
-2. Control Deck status and timeline
-3. Active Jervis configuration
-4. OS service/startup state
-5. Audio device state when relevant
-6. `openclaw doctor` for brain/provider problems
-7. Sanitized logs and a minimal reproduction
-
-## Contribution expectations
-
-A change touching Restore should include a focused test where practical, at least one failure-case check, and documentation for any changed user-visible behavior. Cross-platform branches should be explicit and small rather than scattering OS checks across core logic.
-
-## Related pages
-
-- [Operations index](operations-index.md)
-- [Wiki Home](Home.md)
-- [Previous](operations-backup.md)
-- [Next](operations-update-check.md)
+[Back to Operations](operations-index.md)

@@ -4,6 +4,27 @@ All notable public changes to Jervis are documented here.
 
 Release descriptions are derived from actual code diffs and mirrored in `docs/releases/`.
 
+## [7.3.5] - Unreleased
+
+### Added
+
+- Snapshot rollback system for updates, repairs, install changes, config edits/migrations, restore, and uninstall.
+- Verified native self-update with SHA-256 validation and binary rollback.
+- Backup/restore, crash recovery, safe mode, diagnostics bundle, Repair Center, status dashboard, permission audit, post-install acceptance checks, install resume journal, benchmark history, and OpenClaw compatibility probing.
+- Upgrade + rollback smoke tests in CI.
+
+### Changed
+
+- Config schema is versioned at schema 2 with recovery defaults.
+- SQLite now records an explicit schema version.
+- Repairs, reinstall, and destructive maintenance paths are snapshot-backed.
+
+### Fixed
+
+- Windows binary rollback/update replacement is deferred safely until process exit.
+- Backup restore preserves snapshot identity.
+- Mutable-state restore preserves model/tool caches.
+
 ## [7.3.0] - Unreleased
 
 ### Added

@@ -2,7 +2,7 @@
 
 > A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis 7.3.1 is a low-latency local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
+Jervis 7.3.5 is a low-latency, rollback-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
 ## Install
 
@@ -99,9 +99,52 @@ Jervis identifies from the longer natural command rather than trying to authenti
     jervis repair audio
     jervis repair openclaw
     jervis update-check
+    jervis update
+    jervis update --rollback
+    jervis status
+    jervis repair-center
+    jervis repair all
+    jervis snapshot create
+    jervis snapshot list
+    jervis snapshot restore <id>
+    jervis backup create <file>
+    jervis backup restore <file>
+    jervis doctor --bundle
+    jervis permissions
+    jervis acceptance-test
+    jervis run --safe-mode
     jervis runtime-info
     jervis benchmark
     jervis benchmark --json
+
+## 7.3.5 resilience + rollback
+
+7.3.5 is the final resilience-focused 7.3.x pass before larger 7.4 experience work.
+
+- verified native self-update on the current 7.3 patch line,
+- SHA-256 validation before binary replacement,
+- automatic pre-update snapshots with binary rollback,
+- state snapshots before install/reconfigure, repair, migration, restore, uninstall, and real config edits,
+- manual snapshot create/list/restore commands,
+- backup/export and restore with a pre-restore guard snapshot,
+- versioned config and SQLite schema migration foundations,
+- crash markers with automatic safe-mode escalation after repeated unclean runs,
+- explicit `jervis run --safe-mode` that disables proactive work, skills, and OpenClaw routing,
+- `jervis status` terminal health dashboard,
+- Control Deck **RECOVERY** tab and `jervis repair-center`,
+- snapshot-backed repair for audio, OpenClaw, startup, database, models, and permissions,
+- sanitized diagnostics bundles with secret and home-path redaction,
+- installer resume journal after interrupted setup,
+- post-install acceptance checks,
+- OpenClaw Gateway-RPC compatibility probe,
+- bounded benchmark history,
+- real uninstall/reinstall paths,
+- explicit permission/capability audit,
+- dedicated upgrade + rollback smoke gate in CI.
+
+Snapshots focus on mutable Jervis state. Re-downloadable model/tool caches are preserved in place rather than duplicated into every snapshot.
+
+See [7.3.5 release notes](docs/releases/7.3.5.md).
 
 ## 7.3.1 runtime + hardening
 

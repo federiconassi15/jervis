@@ -172,6 +172,15 @@ class BrainRouter:
             self.state.event("brain_route", "local")
             return RouteReply(True, local, "local")
 
+        if self.config.get("_safe_mode", False):
+            self.state.event("brain_route", "safe-mode")
+            return RouteReply(
+                False,
+                "Safe mode is active. External skills and OpenClaw actions are disabled.",
+                "safe-mode",
+                "safe mode blocks non-local routing",
+            )
+
         skill_reply, skill_name = self.skills.route(
             text,
             context or {"user_id": user_id},

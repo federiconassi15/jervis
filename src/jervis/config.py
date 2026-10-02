@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from .migrations import CURRENT_CONFIG_SCHEMA, migrate_config
+
 DEFAULT_CONFIG: dict[str, Any] = {
-    "schema": 1,
+    "schema": CURRENT_CONFIG_SCHEMA,
     "assistant": {
         "name": "Jervis",
         "wake_word": "jervis",
@@ -86,6 +90,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "quiet_hours_start": "23:00",
         "quiet_hours_end": "07:00",
     },
+    "recovery": {
+        "auto_snapshot": True,
+        "snapshot_keep": 12,
+        "crash_recovery": True,
+        "safe_mode_after_crashes": 3,
+    },
 }
 
 
@@ -133,21 +143,52 @@ def validate(config) -> None:
 
 
 def load(path: Path):
-    config = (
-        deepcopy(DEFAULT_CONFIG)
-        if not path.exists()
-        else _merge(
-            DEFAULT_CONFIG,
-            json.loads(path.read_text(encoding="utf-8")),
-        )
-    )
+    if not path.exists():
+        config = deepcopy(DEFAULT_CONFIG)
+        validate(config)
+        return config
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    migrated, changes = migrate_config(raw)
+    config = _merge(DEFAULT_CONFIG, migrated)
     validate(config)
+    if changes:
+        try:
+            from .paths import Paths
+            from .snapshots import create_snapshot
+            resolved = Paths.resolve()
+            if path.resolve() == (resolved.config / "config.json").resolve():
+                create_snapshot("pre-config-migration", paths=resolved)
+        except Exception:
+            pass
+        temp = path.with_suffix(path.suffix + ".migrated.tmp")
+        temp.write_text(
+            json.dumps(config, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temp.replace(path)
     return config
 
 
 def save(path: Path, config) -> None:
     validate(config)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and os.environ.get("JERVIS_DISABLE_AUTO_SNAPSHOT") != "1":
+        try:
+            from .paths import Paths
+            from .snapshots import create_snapshot, list_snapshots
+            resolved = Paths.resolve()
+            if path.resolve() == (resolved.config / "config.json").resolve():
+                snapshots = list_snapshots(paths=resolved)
+                recent = snapshots[0] if snapshots else None
+                if not (
+                    recent
+                    and recent.reason == "pre-config-edit"
+                    and time.time() - recent.created_at < 60
+                ):
+                    create_snapshot("pre-config-edit", paths=resolved)
+        except Exception:
+            pass
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(
         json.dumps(config, indent=2, sort_keys=True) + "\n",

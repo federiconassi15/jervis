@@ -35,7 +35,7 @@ Shipped:
 
 ## Now — Jervis 7.3.x Hardening
 
-**Status: in progress**
+**Status: 7.3.5 resilience pass in progress**
 
 Before adding another large feature layer, 7.3 must be dogfooded as the public product.
 
@@ -58,6 +58,28 @@ Exit criteria:
 - reboot/startup path is verified
 - OpenClaw failure degrades cleanly to local Jervis behavior
 - remaining issues are documented before 7.4 begins
+
+### Jervis 7.3.5 — Resilience
+
+Before 7.4, the 7.3 line gains a dedicated recovery layer:
+
+- verified patch self-update with SHA-256 validation
+- pre-update binary/state snapshots and rollback
+- snapshots before install edits, repairs, migrations, restores, uninstall, and real config edits
+- backup/restore
+- config and database migration versioning
+- crash detection and safe mode
+- sanitized diagnostics bundle
+- Control Deck Recovery/Repair Center
+- uninstall/reinstall cleanup
+- interrupted-installer resume journal
+- OpenClaw compatibility checks
+- post-install acceptance tests
+- bounded benchmark history
+- explicit permission/capability audit
+- dedicated upgrade/rollback CI smoke gate
+
+The purpose of 7.3.5 is not feature expansion; it is to make 7.4 safer to build and easier to recover when experiments go wrong.
 
 ## Next — Jervis 7.4 “Feels Alive”
 

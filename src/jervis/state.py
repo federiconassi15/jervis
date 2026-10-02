@@ -7,6 +7,8 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+STATE_SCHEMA_VERSION = 1
+
 SCHEMA = """
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=NORMAL;
@@ -103,6 +105,7 @@ class State:
         max_metrics: int = 5000,
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
+        existed_before = path.exists()
         self.max_dialogue = max(1, int(max_dialogue))
         self.max_events = max(1, int(max_events))
         self.max_metrics = max(100, int(max_metrics))
@@ -114,7 +117,27 @@ class State:
             isolation_level="DEFERRED",
         )
         self._db.row_factory = sqlite3.Row
+        current_version = int(self._db.execute("PRAGMA user_version").fetchone()[0])
+        if existed_before and current_version < STATE_SCHEMA_VERSION:
+            try:
+                from .paths import Paths
+                from .snapshots import create_snapshot
+                resolved = Paths.resolve()
+                if path.resolve() == (resolved.data / "jervis.sqlite3").resolve():
+                    create_snapshot("pre-db-migration", paths=resolved)
+            except Exception:
+                pass
+        if current_version > STATE_SCHEMA_VERSION:
+            raise RuntimeError(
+                "database schema "
+                + str(current_version)
+                + " is newer than this Jervis build supports ("
+                + str(STATE_SCHEMA_VERSION)
+                + ")"
+            )
         self._db.executescript(SCHEMA)
+        if current_version < STATE_SCHEMA_VERSION:
+            self._db.execute("PRAGMA user_version=" + str(STATE_SCHEMA_VERSION))
         self._db.commit()
         self._events_since_prune = 0
         self._dialogue_since_prune = 0

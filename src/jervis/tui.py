@@ -8,6 +8,9 @@ from .agents import openclaw_agents
 from .config import load, save
 from .openclaw_setup import find_openclaw
 from .paths import Paths
+from .repair import repair
+from .snapshots import create_snapshot, list_snapshots
+from .status import collect_status
 from .permissions import describe_role
 from .security import verify_passphrase
 from .skills import SkillManager
@@ -26,6 +29,7 @@ TABS = [
     "PERMISSIONS",
     "TIMELINE",
     "LOGS",
+    "RECOVERY",
     "SETTINGS",
     "AUTH",
 ]
@@ -131,6 +135,8 @@ def run() -> None:
         screen.nodelay(True)
         tab = 0
         notice = ""
+        recovery_cache = None
+        recovery_cache_at = 0.0
 
         while True:
             screen.erase()
@@ -304,6 +310,50 @@ def run() -> None:
                     )
                 if not rows:
                     safe(screen, 5, 2, "No runtime events recorded yet.")
+            elif name == "RECOVERY":
+                try:
+                    if recovery_cache is None or time.time() - recovery_cache_at >= 2.0:
+                        recovery_cache = collect_status(paths)
+                        recovery_cache_at = time.time()
+                    report = recovery_cache
+                    safe(screen, 5, 2, "RECOVERY CENTER", curses.A_BOLD)
+                    safe(
+                        screen,
+                        6,
+                        2,
+                        "Service: "
+                        + ("OK" if report["service"]["ok"] else "ATTENTION")
+                        + " · "
+                        + str(report["service"]["detail"]),
+                    )
+                    safe(
+                        screen,
+                        7,
+                        2,
+                        "OpenClaw: "
+                        + ("OK" if report["openclaw"]["ok"] else "ATTENTION")
+                        + " · "
+                        + str(report["openclaw"]["detail"]),
+                    )
+                    safe(
+                        screen,
+                        8,
+                        2,
+                        "Recovery: "
+                        + (
+                            "previous run unclean"
+                            if report["crash"]["previous_unclean"]
+                            else "clean"
+                        ),
+                    )
+                    snapshots = list_snapshots(paths=paths)
+                    safe(screen, 9, 2, "Snapshots: " + str(len(snapshots)))
+                    if snapshots:
+                        safe(screen, 10, 2, "Latest: " + snapshots[0].id)
+                    safe(screen, 12, 2, "R = repair all · S = create snapshot")
+                    safe(screen, 13, 2, "CLI: jervis snapshot restore <id> for rollback")
+                except Exception as exc:
+                    safe(screen, 5, 2, "Recovery center error: " + str(exc))
             elif name == "SETTINGS":
                 try:
                     config = load(config_path)
@@ -357,6 +407,25 @@ def run() -> None:
                 notice = ""
             elif name == "AUTH" and key in (ord("a"), ord("A")):
                 notice = auth_action(screen, state)
+            elif name == "RECOVERY" and key in (ord("s"), ord("S")):
+                try:
+                    snap = create_snapshot("control-deck-manual", paths=paths)
+                    recovery_cache = None
+                    notice = "Snapshot created: " + snap.id
+                except Exception as exc:
+                    notice = "Snapshot failed: " + str(exc)
+            elif name == "RECOVERY" and key in (ord("r"), ord("R")):
+                try:
+                    results = repair("all", paths=paths)
+                    recovery_cache = None
+                    failed = [item.component for item in results if not item.ok]
+                    notice = (
+                        "Repair complete."
+                        if not failed
+                        else "Repair needs attention: " + ", ".join(failed)
+                    )
+                except Exception as exc:
+                    notice = "Repair failed: " + str(exc)
             elif name == "AUDIO" and key in (ord("+"), ord("="), ord("-"), ord("_")):
                 try:
                     config = load(config_path)

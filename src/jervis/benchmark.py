@@ -146,8 +146,9 @@ def run_benchmark(
     frame = _synthetic_frame()
     audio_stats = _time_many(lambda: analyze(frame), iterations, 1000.0)
 
-    return {
+    report = {
         "jervis_version": __version__,
+        "timestamp": time.time(),
         "system": {
             "platform": platform.platform(),
             "machine": platform.machine(),
@@ -165,6 +166,17 @@ def run_benchmark(
         "iterations": iterations,
         "history": history,
     }
+
+    history_path = resolved.data / "benchmark-history.jsonl"
+    try:
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(report, separators=(",", ":")) + "\n")
+        lines = history_path.read_text(encoding="utf-8").splitlines()
+        if len(lines) > 50:
+            history_path.write_text("\n".join(lines[-50:]) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    return report
 
 
 def format_report(report: dict[str, Any]) -> str:
@@ -218,3 +230,65 @@ def format_report(report: dict[str, Any]) -> str:
 
 def main_json(report: dict[str, Any]) -> str:
     return json.dumps(report, indent=2, sort_keys=True)
+
+
+def load_benchmark_history(
+    *,
+    paths: Paths | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    resolved = paths or Paths.resolve()
+    history_path = resolved.data / "benchmark-history.jsonl"
+    if not history_path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in history_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows[-max(1, int(limit)):]
+
+
+def format_benchmark_history(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return "No benchmark history recorded yet."
+
+    lines = ["Jervis benchmark history", ""]
+    previous: float | None = None
+    for row in rows[-12:]:
+        live = row.get("live", {})
+        stats = live.get("command_to_reply_ms") if isinstance(live, dict) else None
+        median = (
+            float(stats["median"])
+            if isinstance(stats, dict) and stats.get("median") is not None
+            else None
+        )
+        version = str(row.get("jervis_version", "?"))
+        stamp = time.strftime(
+            "%Y-%m-%d %H:%M",
+            time.localtime(float(row.get("timestamp", 0.0))),
+        )
+        if median is None:
+            lines.append(stamp + "  v" + version + "  no live command latency")
+            continue
+        delta = ""
+        if previous is not None:
+            change = median - previous
+            direction = "slower" if change > 0 else "faster"
+            delta = "  · " + format(abs(change), ".1f") + "ms " + direction
+        lines.append(
+            stamp
+            + "  v"
+            + version
+            + "  median="
+            + format(median, ".1f")
+            + "ms"
+            + delta
+        )
+        previous = median
+    return "\n".join(lines)

@@ -6,9 +6,12 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
+from .acceptance import run_acceptance
 from .config import DEFAULT_CONFIG, load, save
 from .install_plan import InstallOutcome, InstallPlan
+from .install_resume import clear_resume, read_resume, write_resume
 from .install_tx import InstallTransaction
+from .openclaw_compat import check_openclaw_compatibility
 from .openclaw_setup import doctor as openclaw_doctor
 from .openclaw_setup import find_openclaw, install_official
 from .paths import Paths
@@ -17,6 +20,7 @@ from .prereqs import ensure_adb, ensure_linux_audio, ensure_linux_openclaw_tools
 from .security import hash_passphrase
 from .speaker_model import ensure_speaker_model
 from .state import State
+from .snapshots import create_snapshot
 
 Progress = Callable[[int, int, str, str], None]
 TOTAL_STEPS = 8
@@ -107,16 +111,37 @@ def run_install(
 ) -> InstallOutcome:
     plan.validate()
     outcome = InstallOutcome()
+    paths = Paths.resolve()
+    paths.ensure()
 
-    _emit(progress, 1, "Checking this system", "Validating audio and OS prerequisites")
+    previous_resume = read_resume(paths)
+    if previous_resume and previous_resume.active:
+        progress(
+            max(1, previous_resume.step),
+            TOTAL_STEPS,
+            "Resuming interrupted install",
+            "Last recorded stage: " + previous_resume.title,
+        )
+
+    if (
+        (paths.config / "config.json").exists()
+        or (paths.data / "jervis.sqlite3").exists()
+    ):
+        create_snapshot("pre-install-edit", paths=paths)
+
+    def emit(step: int, title: str, detail: str = "") -> None:
+        write_resume(step, title, paths=paths)
+        _emit(progress, step, title, detail)
+
+    emit(1, "Checking this system", "Validating audio and OS prerequisites")
     ensure_linux_audio(lambda _message: True)
 
-    _emit(progress, 2, "Preparing OpenClaw", "Reusing an existing install when possible")
+    emit(2, "Preparing OpenClaw", "Reusing an existing install when possible")
     cli = find_openclaw()
     if cli is None and plan.install_openclaw:
         ensure_linux_openclaw_tools()
         cli = install_official(
-            lambda message: _emit(progress, 2, "Preparing OpenClaw", message)
+            lambda message: emit(2, "Preparing OpenClaw", message)
         )
     if cli is None:
         outcome.warnings.append(
@@ -126,7 +151,7 @@ def run_install(
         outcome.openclaw_cli = str(cli)
         outcome.openclaw_needs_wizard = plan.openclaw_setup == "wizard"
 
-    _emit(progress, 3, "Resolving audio", "Checking selected microphone and output")
+    emit(3, "Resolving audio", "Checking selected microphone and output")
     android_serial = plan.android_serial
     if plan.source_kind == "android":
         adb = ensure_adb(lambda _message: True)
@@ -145,9 +170,7 @@ def run_install(
                     "More than one Android phone is connected. Go back and choose a specific device."
                 )
 
-    _emit(progress, 4, "Voice recognition", "Verifying the local speaker-recognition model")
-    paths = Paths.resolve()
-    paths.ensure()
+    emit(4, "Voice recognition", "Verifying the local speaker-recognition model")
     model_ok = ensure_speaker_model(
         paths.data / "models" / "speaker.onnx",
         lambda message: _emit(progress, 4, "Voice recognition", message),
@@ -157,7 +180,7 @@ def run_install(
             "The speaker model could not be downloaded; trusted sessions still work after explicit auth."
         )
 
-    _emit(progress, 5, "Writing configuration", "Applying your Desktop/Server and audio choices")
+    emit(5, "Writing configuration", "Applying your Desktop/Server and audio choices")
     config_path = paths.config / "config.json"
     database_path = paths.data / "jervis.sqlite3"
     if config_path.exists():
@@ -186,10 +209,10 @@ def run_install(
         save(config_path, config)
         load(config_path)
 
-        _emit(progress, 6, "Creating your profile", "Securing the owner account locally")
+        emit(6, "Creating your profile", "Securing the owner account locally")
         _configure_owner(paths, config, plan)
 
-        _emit(progress, 7, "Startup integration", "Connecting Jervis to the operating system")
+        emit(7, "Startup integration", "Connecting Jervis to the operating system")
         service_env = {
             "JERVIS_HOME": str(paths.root),
             "JERVIS_LOG_HOME": str(paths.logs),
@@ -204,7 +227,7 @@ def run_install(
             previous_mode,
         )
 
-        _emit(progress, 8, "Final checks", "Verifying configuration and OpenClaw health")
+        emit(8, "Final checks", "Verifying configuration and OpenClaw health")
         load(config_path)
         if cli and not outcome.openclaw_needs_wizard:
             healthy, _detail = openclaw_doctor(cli)
@@ -215,4 +238,21 @@ def run_install(
 
         transaction.commit()
 
+    compat = check_openclaw_compatibility()
+    if outcome.openclaw_needs_wizard and compat.installed and not compat.wizard_rpc:
+        outcome.warnings.append(
+            "Installed OpenClaw does not expose the Gateway RPC interface required "
+            "for embedded setup. Update OpenClaw before guided onboarding."
+        )
+
+    for check in run_acceptance(paths):
+        if check.ok:
+            continue
+        if check.name == "openclaw" and outcome.openclaw_needs_wizard:
+            continue
+        outcome.warnings.append(
+            "Post-install acceptance: " + check.name + " — " + check.detail
+        )
+
+    clear_resume(paths)
     return outcome

@@ -1,61 +1,35 @@
-# Getting Started: Backups
+# Getting Started: Backups & Snapshots
 
-## Purpose
+Jervis 7.3.5 uses one recovery format for automatic snapshots and user-created backups.
 
-This page documents **Backups** in the **Getting Started** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.
+## Manual snapshot
 
-## How it works
+    jervis snapshot create "before changing audio"
+    jervis snapshot list
+    jervis snapshot restore <snapshot-id>
 
-Jervis keeps OS-specific behavior behind platform adapters while the voice loop, identity sessions, permissions, state, skills, and OpenClaw routing remain shared. Backups should therefore behave consistently even when the host operating system uses a different audio API, startup manager, or filesystem convention.
+Snapshots include mutable Jervis state such as configuration, SQLite state, memory and user skills. Large re-downloadable model/tool caches are not duplicated into every snapshot and are preserved during restore.
 
-For the 7.1 reliability line, the default interaction is: wake word → **Boss?** acknowledgement → capture the full natural command → evaluate the trusted session and speaker evidence → route locally or through OpenClaw → keep the same speaker locked through the follow-up window.
+A restore creates a guard snapshot first so the rollback itself can be undone.
 
-## Desktop and Server behavior
+## Export a backup
 
-**Desktop mode** uses the user's normal computer audio devices. Setup enumerates available microphones and outputs and asks which ones Jervis should use. An Android phone may be selected as the microphone.
+    jervis backup create ~/jervis-backup.tar.gz
 
-**Server mode** uses the same runtime but emphasizes persistent startup, explicit device choices, and remote-friendly diagnostics. It is suitable for a NUC, home server, workstation, or other always-on machine.
+Restore it later:
 
-## Cross-platform notes
+    jervis backup restore ~/jervis-backup.tar.gz
 
-- **Linux:** managed startup uses a systemd user service where available.
-- **Windows:** per-user managed startup uses Task Scheduler.
-- **macOS:** managed startup uses launchd.
-- Desktop audio is exposed through the host PortAudio backend.
-- Android AudioSource uses ADB forwarding to a localhost TCP socket, so the Jervis-side transport is shared across all three operating systems.
+Backup restore creates a pre-restore snapshot before applying the imported state.
 
-## Reliability rules
+## Automatic snapshots
 
-1. Do not turn one noisy voice sample into an authentication loop.
-2. Keep expensive speech and speaker models lazy where practical.
-3. Bound histories, queues, caches, and stored embeddings.
-4. Repair the smallest failed component before restarting the whole runtime.
-5. Keep the local shell useful when OpenClaw or a model provider is unavailable.
-6. Treat speaker recognition as a convenience identity signal, not high-assurance security.
+7.3.5 automatically creates recovery points before update, install/reconfiguration, repair, migration, real config edits, restore and uninstall operations.
 
-## Privacy and security
+Rapid config edits are coalesced so changing a slider repeatedly does not create dozens of nearly identical recovery points.
 
-Never commit provider credentials, authentication passphrases, voiceprints, raw recordings, private dialogue, Android serial numbers, private IP addresses, or personal filesystem paths. Jervis stores authentication passphrases as PBKDF2-HMAC-SHA256 verifiers rather than plaintext. Raw microphone audio is not intended to be persisted by default.
+## Live database safety
 
-## Diagnostics
+Jervis uses SQLite's backup API for the live state database instead of blindly copying a possibly active WAL database.
 
-Start with `jervis doctor`. For agentic-brain problems, also use `openclaw doctor`. The Control Deck timeline should show wake, identity, routing, provider, and repair events with timestamps so failures can be diagnosed without guessing.
-
-When debugging Backups, verify configuration and selected devices before changing recognition thresholds. Threshold changes should be a last step after confirming that audio quality and session state are healthy.
-
-## Development checklist
-
-- Test the normal path.
-- Test at least one failure path.
-- Consider Windows, macOS, and Linux behavior.
-- Consider Desktop and Server modes.
-- Avoid blocking or hot-polling work in the always-on loop.
-- Avoid logging secrets or authentication text.
-- Preserve rollback and doctor behavior when setup files change.
-
-## Related pages
-
-- [Getting Started index](getting-started-index.md)
-- [Wiki Home](Home.md)
-- [Previous](getting-started-updates.md)
-- [Next](getting-started-uninstall.md)
+[Back to Getting Started](getting-started-index.md)

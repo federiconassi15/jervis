@@ -13,6 +13,7 @@ from .audio.processing import analyze, quality_score, rms
 from .brain import OpenClawBrain
 from .config import load
 from .identity import IdentityManager
+from .lifecycle import begin_runtime, end_runtime, inspect_runtime
 from .paths import Paths
 from .presence import PresenceManager
 from .proactive import ProactiveEngine
@@ -30,10 +31,23 @@ class Runtime:
         "My voice should be recognized locally.",
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, safe_mode: bool = False) -> None:
         self.paths = Paths.resolve()
         self.paths.ensure()
         self.config = load(self.paths.config / "config.json")
+        crash_state = inspect_runtime(self.paths)
+        recovery = self.config.get("recovery", {})
+        threshold = max(1, int(recovery.get("safe_mode_after_crashes", 3)))
+        self.safe_mode = bool(
+            safe_mode
+            or (
+                recovery.get("crash_recovery", True)
+                and crash_state.consecutive_crashes >= threshold
+            )
+        )
+        if self.safe_mode:
+            self.config["_safe_mode"] = True
+            self.config["proactive"]["enabled"] = False
 
         privacy = self.config["privacy"]
         identity_config = self.config["identity"]
@@ -488,8 +502,11 @@ class Runtime:
         self._onboard_if_needed(audio, user_id, [command_audio, name_audio])
         return user_id
 
-    def run(self) -> None:
-        self.state.event("runtime_start", "Jervis 7.3")
+    def _run_loop(self) -> None:
+        self.state.event(
+            "runtime_start",
+            "Jervis 7.3.5" + (" safe-mode" if self.safe_mode else ""),
+        )
 
         with self.source() as audio:
             self._audio = audio
@@ -684,3 +701,17 @@ class Runtime:
                         processing_started=processing_started,
                     )
                     until = time.monotonic() + self.config["speech"]["follow_up_seconds"]
+
+
+    def run(self) -> None:
+        begin_runtime(self.paths)
+        try:
+            self._run_loop()
+        except KeyboardInterrupt:
+            end_runtime(self.paths)
+            raise
+        except BaseException:
+            # Leave the session marker unclean so the next start can detect a crash.
+            raise
+        else:
+            end_runtime(self.paths)
