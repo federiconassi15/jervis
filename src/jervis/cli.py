@@ -4,6 +4,7 @@ import argparse
 import json
 from dataclasses import asdict
 
+from .benchmark import format_report, main_json, run_benchmark
 from .doctor import run_doctor
 from .fast import NATIVE_AVAILABLE, backend_name
 from .installer import install
@@ -22,6 +23,14 @@ def main(argv=None) -> None:
         subparsers.add_parser(name)
     repair_parser = subparsers.add_parser("repair")
     repair_parser.add_argument("component", choices=("audio", "openclaw"))
+
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Measure local hot paths and summarize recent live turn latency.",
+    )
+    benchmark_parser.add_argument("--iterations", type=int, default=100)
+    benchmark_parser.add_argument("--history", type=int, default=100)
+    benchmark_parser.add_argument("--json", action="store_true", dest="as_json")
 
     args = parser.parse_args(argv)
     command = args.command or "tui"
@@ -49,6 +58,12 @@ def main(argv=None) -> None:
                 indent=2,
             )
         )
+    elif command == "benchmark":
+        report = run_benchmark(
+            iterations=args.iterations,
+            history=args.history,
+        )
+        print(main_json(report) if args.as_json else format_report(report))
     elif command == "repair":
         result = repair(args.component)
         print(("[OK] " if result.ok else "[FAIL] ") + result.component + ": " + result.detail)

@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS notifications(
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_delivery
   ON notifications(delivered,user_id,id);
+CREATE TABLE IF NOT EXISTS metrics(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  name TEXT NOT NULL,
+  value REAL NOT NULL,
+  unit TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_metrics_name_id ON metrics(name,id DESC);
 CREATE TABLE IF NOT EXISTS kv(
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -84,11 +93,19 @@ CREATE TABLE IF NOT EXISTS kv(
 
 class State:
     PRUNE_EVERY = 64
+    METRIC_PRUNE_EVERY = 128
 
-    def __init__(self, path: Path, max_dialogue: int = 2000, max_events: int = 5000):
+    def __init__(
+        self,
+        path: Path,
+        max_dialogue: int = 2000,
+        max_events: int = 5000,
+        max_metrics: int = 5000,
+    ):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.max_dialogue = max(1, int(max_dialogue))
         self.max_events = max(1, int(max_events))
+        self.max_metrics = max(100, int(max_metrics))
         self._lock = RLock()
         self._db = sqlite3.connect(
             path,
@@ -101,6 +118,7 @@ class State:
         self._db.commit()
         self._events_since_prune = 0
         self._dialogue_since_prune = 0
+        self._metrics_since_prune = 0
         self._embedding_cache: dict[str, list[list[float]]] | None = None
 
     @staticmethod
@@ -112,6 +130,7 @@ class State:
             try:
                 self._prune_events(force=True)
                 self._prune_dialogue(force=True)
+                self._prune_metrics(force=True)
                 self._db.execute("PRAGMA optimize")
                 self._db.commit()
             finally:
@@ -140,6 +159,70 @@ class State:
             (self.max_dialogue,),
         )
         self._dialogue_since_prune = 0
+
+    def _prune_metrics(self, *, force: bool = False) -> None:
+        threshold = min(
+            self.METRIC_PRUNE_EVERY,
+            max(1, self.max_metrics // 10),
+        )
+        if not force and self._metrics_since_prune < threshold:
+            return
+        self._db.execute(
+            "DELETE FROM metrics WHERE id <= COALESCE(("
+            "SELECT id FROM metrics ORDER BY id DESC LIMIT 1 OFFSET ?"
+            "),0)",
+            (self.max_metrics,),
+        )
+        self._metrics_since_prune = 0
+
+    def metric(
+        self,
+        name: str,
+        value: float,
+        unit: str = "ms",
+        detail: str = "",
+    ) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO metrics(ts,name,value,unit,detail) VALUES(?,?,?,?,?)",
+                (
+                    time.time(),
+                    str(name)[:120],
+                    float(value),
+                    str(unit)[:32],
+                    str(detail)[:500],
+                ),
+            )
+            self._metrics_since_prune += 1
+            self._prune_metrics()
+            # Deliberately do not commit here. Runtime telemetry piggybacks on
+            # the next normal state commit instead of adding an fsync to the
+            # latency path. close() also commits any remaining samples.
+
+    def recent_metrics(
+        self,
+        name: str | None = None,
+        limit: int = 100,
+    ) -> list[sqlite3.Row]:
+        with self._lock:
+            if name is None:
+                rows = list(
+                    self._db.execute(
+                        "SELECT ts,name,value,unit,detail FROM metrics "
+                        "ORDER BY id DESC LIMIT ?",
+                        (max(1, int(limit)),),
+                    )
+                )
+            else:
+                rows = list(
+                    self._db.execute(
+                        "SELECT ts,name,value,unit,detail FROM metrics "
+                        "WHERE name=? ORDER BY id DESC LIMIT ?",
+                        (name, max(1, int(limit))),
+                    )
+                )
+        rows.reverse()
+        return rows
 
     def _insert_event_locked(self, kind: str, detail: str = "") -> None:
         self._db.execute(

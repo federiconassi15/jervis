@@ -295,20 +295,35 @@ class Runtime:
             except Exception:
                 pass
 
-    def respond(self, text: str, user_id: str, log_user: bool = True) -> None:
+    def respond(
+        self,
+        text: str,
+        user_id: str,
+        log_user: bool = True,
+        processing_started: float | None = None,
+    ) -> None:
         user = self.state.user(user_id)
         name = str(user["name"]) if user else user_id
         if log_user:
             self.state.dialogue(name, text, user_id)
 
         self.activity("Routing command")
+        brain_started = time.perf_counter()
         reply = self.router.ask(
             text,
             user_id,
             authenticated=True,
             context={"runtime": self, "user_id": user_id},
         )
+        brain_ms = (time.perf_counter() - brain_started) * 1000.0
+        self.state.metric("brain_ms", brain_ms, detail=reply.route)
         self.state.set_kv("brain.last_route", reply.route)
+        if processing_started is not None:
+            self.state.metric(
+                "command_to_reply_ms",
+                (time.perf_counter() - processing_started) * 1000.0,
+                detail=reply.route,
+            )
         if reply.ok:
             self.speak(reply.text, user_id, allow_barge=True)
         else:
@@ -500,7 +515,9 @@ class Runtime:
                 if command_audio.size < self.config["audio"]["sample_rate"] * 0.25:
                     continue
 
+                processing_started = time.perf_counter()
                 self.activity("Understanding command")
+                inference_started = time.perf_counter()
                 stt_future = self._inference_pool.submit(
                     self.stt.transcribe,
                     command_audio,
@@ -513,6 +530,11 @@ class Runtime:
                 )
                 command = stt_future.result()
                 identity = identity_future.result()
+                self.state.metric(
+                    "inference_ms",
+                    (time.perf_counter() - inference_started) * 1000.0,
+                    detail="stt+identity",
+                )
                 if not command:
                     self.speak("I didn't catch that.")
                     continue
@@ -520,6 +542,8 @@ class Runtime:
                 if identity.needs_retry:
                     self.speak("One more time, boss?")
                     retry = self.capture(audio)
+                    processing_started = time.perf_counter()
+                    retry_inference_started = time.perf_counter()
                     retry_stt = self._inference_pool.submit(
                         self.stt.transcribe,
                         retry,
@@ -532,6 +556,11 @@ class Runtime:
                     )
                     retry_text = retry_stt.result()
                     again = retry_identity.result()
+                    self.state.metric(
+                        "inference_ms",
+                        (time.perf_counter() - retry_inference_started) * 1000.0,
+                        detail="retry-stt+identity",
+                    )
                     if again.authenticated and again.user_id:
                         identity = again
                         command = retry_text or command
@@ -547,6 +576,7 @@ class Runtime:
                         continue
                     identity.user_id = user_id
                     identity.authenticated = True
+                    processing_started = None
 
                 user_id = identity.user_id
                 if user_id is None:
@@ -588,7 +618,12 @@ class Runtime:
                         quality,
                     )
 
-                self.respond(command, user_id, log_user=not logged_unknown)
+                self.respond(
+                    command,
+                    user_id,
+                    log_user=not logged_unknown,
+                    processing_started=processing_started,
+                )
 
                 while self._pending_barge is not None:
                     barged_audio = self._pending_barge
@@ -596,14 +631,25 @@ class Runtime:
                     if barged_audio.size == 0:
                         break
                     self.activity("Barge-in — transcribing")
+                    processing_started = time.perf_counter()
+                    inference_started = time.perf_counter()
                     barged_text = self.stt.transcribe(
                         barged_audio,
                         self.config["assistant"]["language"],
                     )
+                    self.state.metric(
+                        "inference_ms",
+                        (time.perf_counter() - inference_started) * 1000.0,
+                        detail="barge-stt",
+                    )
                     if not barged_text:
                         break
                     self.sessions.refresh()
-                    self.respond(barged_text, user_id)
+                    self.respond(
+                        barged_text,
+                        user_id,
+                        processing_started=processing_started,
+                    )
 
                 until = time.monotonic() + self.config["speech"]["follow_up_seconds"]
 
@@ -617,13 +663,24 @@ class Runtime:
                         continue
 
                     follow_audio = self.capture(audio, follow)
+                    processing_started = time.perf_counter()
+                    inference_started = time.perf_counter()
                     follow_text = self.stt.transcribe(
                         follow_audio,
                         self.config["assistant"]["language"],
+                    )
+                    self.state.metric(
+                        "inference_ms",
+                        (time.perf_counter() - inference_started) * 1000.0,
+                        detail="follow-up-stt",
                     )
                     if not follow_text:
                         break
 
                     self.sessions.refresh()
-                    self.respond(follow_text, user_id)
+                    self.respond(
+                        follow_text,
+                        user_id,
+                        processing_started=processing_started,
+                    )
                     until = time.monotonic() + self.config["speech"]["follow_up_seconds"]

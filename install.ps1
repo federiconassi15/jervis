@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch {}
 
 $Repo = "federiconassi15/jervis"
 $Base = "https://github.com/$Repo/releases/latest/download"
@@ -35,7 +36,19 @@ try {
         throw "Checksum verification failed."
     }
 
-    Write-Host "Jervis: verified. Starting installer..."
+    Write-Host ""
+    Write-Host "┌─ JERVIS BOOTSTRAP ─────────────────────────────┐"
+    Write-Host "│ target   $Asset"
+    Write-Host "│ verify   SHA-256 ✓"
+    Write-Host "│ state    native payload ready"
+    Write-Host "└─ launching installation control deck ──────────┘"
+    try {
+        [Console]::Beep(760, 55)
+        [Console]::Beep(980, 70)
+    }
+    catch {
+        [Console]::Write("`a`a")
+    }
     & $Binary
     exit $LASTEXITCODE
 }

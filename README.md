@@ -2,7 +2,7 @@
 
 > A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis 7.3 is a low-latency local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
+Jervis 7.3.1 is a low-latency local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
 ## Install
 
@@ -100,10 +100,12 @@ Jervis identifies from the longer natural command rather than trying to authenti
     jervis repair openclaw
     jervis update-check
     jervis runtime-info
+    jervis benchmark
+    jervis benchmark --json
 
-## 7.3 runtime
+## 7.3.1 runtime + hardening
 
-The 7.3 runtime is optimized around lower voice-turn latency:
+The 7.3 runtime is optimized around lower voice-turn latency, while 7.3.1 adds hardening, benchmarking, and a more expressive terminal-native setup experience:
 
 - optional Rust/PyO3 audio analysis and adaptive VAD,
 - 450 ms configurable end-of-command silence endpointing,
@@ -112,9 +114,23 @@ The 7.3 runtime is optimized around lower voice-turn latency:
 - lighter desktop audio buffering and cached Android resampling,
 - SQLite WAL/NORMAL state with batched retention housekeeping,
 - OpenClaw Gateway HTTP fast path with safe CLI fallback,
-- `jervis runtime-info` to show the active acceleration backend.
+- `jervis runtime-info` to show the active acceleration backend,
+- `jervis benchmark` for local and recent live latency measurements,
+- Unicode-framed installation Control Deck with terminal-native BEL/console cues for boot, attention, install start, and completion.
 
-See [7.3.0 release notes](docs/releases/7.3.0.md) for the code-derived change list.
+See [7.3.1 release notes](docs/releases/7.3.1.md) for the current code-derived change list and [7.3.0 release notes](docs/releases/7.3.0.md) for the original 7.3 runtime rebuild.
+
+### Hardening / benchmarking
+
+The 7.3.x hardening line adds repeatable measurements before 7.4 feature work:
+
+    jervis benchmark
+    jervis benchmark --iterations 250 --history 200
+    jervis benchmark --json
+
+The synthetic section measures the local DSP, SQLite write/read, and brain-context snapshot paths on the current machine. The live section summarizes recent real `inference_ms`, `brain_ms`, and `command_to_reply_ms` samples recorded during normal voice use.
+
+See [Dogfood & Soak Plan](docs/DOGFOOD.md) and the updated [Roadmap](docs/ROADMAP.md).
 
 ## Wiki
 

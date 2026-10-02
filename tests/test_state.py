@@ -85,3 +85,16 @@ def test_context_snapshot_can_skip_dialogue(tmp_path):
         assert snapshot["dialogue"] == []
     finally:
         state.close()
+
+
+def test_metrics_are_bounded_and_queryable(tmp_path):
+    state = State(tmp_path / "state.sqlite3", max_metrics=100)
+    try:
+        for index in range(240):
+            state.metric("brain_ms", float(index), detail="local")
+        rows = state.recent_metrics("brain_ms", 200)
+        assert len(rows) <= 110
+        assert rows[-1]["value"] == 239.0
+        assert rows[-1]["unit"] == "ms"
+    finally:
+        state.close()

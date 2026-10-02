@@ -1,35 +1,128 @@
-# Roadmap
+# Jervis Roadmap
 
-This roadmap describes direction, not guaranteed release dates.
+This roadmap describes direction, not guaranteed release dates. Release notes are derived from actual code changes; the roadmap is for intent and sequencing.
 
-## Jervis 7.1 — Voice reliability
+## Shipped
 
-Primary goal: make normal conversation feel continuous instead of repeatedly re-authenticating the same person.
+### Jervis 7.1 — Voice reliability
 
-Planned work:
+Established the public cross-platform Jervis baseline:
 
-- **Trusted conversation sessions** — successful identity persists for a sensible session window and refreshes during active conversation.
-- **Longer speaker samples** — identify from natural follow-up speech rather than only the short wake word.
-- **Confidence bands** — strong match, session-assisted match, uncertain/retry, and authentication-required states.
-- **Retry before password** — one natural retry before requiring explicit authentication.
-- **Continuous voice learning** — accept only high-confidence, clean samples into a speaker profile.
-- **Conversation lock-on** — follow-up turns remain associated with the current speaker unless another speaker is confidently detected.
-- **"Boss?" acknowledgement** — short wake response while the next utterance is captured.
-- **Sensitive-action escalation** — ordinary conversation can use trusted sessions while privileged actions may require stronger confidence or explicit authentication.
+- trusted conversation sessions
+- longer speaker samples and confidence bands
+- retry-before-password identity flow
+- continuous voice learning
+- conversation lock-on
+- local permissions, skills, agents, presence, proactive alerts, timeline, repair, and Control Deck foundations
+- native public installer and cross-platform release pipeline
 
-## Jervis 7.x
+### Jervis 7.3 — Swift runtime
 
-- multi-user preferences and memory
-- permissions and roles
-- presence awareness
-- skills
-- MCP / agent hub
-- proactive notifications and quiet hours
-- richer event timeline
-- audio-quality monitoring
-- component-level self-repair
-- expanded Control Deck
+Primary goal: reduce perceived voice-turn latency without turning Jervis into a platform-specific science project.
 
-## Public installer
+Shipped:
 
-A generic installer will be published only after machine-specific assumptions have been removed and install/rollback behavior has been tested on a clean target.
+- Rust/PyO3 acceleration for audio analysis and adaptive VAD in official native builds
+- 450 ms configurable command endpointing
+- parallel STT + speaker identification
+- background STT, speaker, wake, and common-TTS prewarming
+- faster OpenClaw Gateway HTTP path with CLI fallback
+- leaner SQLite hot path and batched housekeeping
+- vectorized speaker matching
+- lighter desktop audio buffering and cached Android resampling
+- bounded brain context instead of replaying redundant local dialogue
+- runtime backend visibility via `jervis runtime-info`
+
+## Now — Jervis 7.3.x Hardening
+
+**Status: in progress**
+
+Before adding another large feature layer, 7.3 must be dogfooded as the public product.
+
+Primary work:
+
+- **Benchmarking** — ship `jervis benchmark` for repeatable local DSP/state/context measurements and live turn-latency summaries.
+- **Live latency telemetry** — record inference, brain-route, and command-to-reply timings during normal use.
+- **Fresh-install dogfood** — install the public release on real target hardware with no repository shortcuts.
+- **Soak testing** — long idle periods, repeated wake/follow-up turns, barge-in, speaker learning, and multi-user sessions.
+- **Restart/reboot testing** — verify startup and audio recovery after host reboot.
+- **Failure testing** — network loss, OpenClaw outage, missing audio device, noisy/quiet microphones, and Android ADB disconnects.
+- **7.3.1 policy** — bug fixes, observability, compatibility, and measured latency improvements only. No major feature expansion.
+
+Exit criteria:
+
+- public installer succeeds on the target NUC from a clean state
+- no known data-loss or auth-boundary bug
+- benchmark output is stable enough to compare builds
+- at least one multi-hour soak session without runtime failure
+- reboot/startup path is verified
+- OpenClaw failure degrades cleanly to local Jervis behavior
+- remaining issues are documented before 7.4 begins
+
+## Next — Jervis 7.4 “Feels Alive”
+
+Primary goal: make Jervis feel continuous, aware, and contextually present **without pretending to be sentient**.
+
+### Continuity
+
+- richer per-user long-term memory with explicit provenance and deletion controls
+- conversation/topic continuity across sessions
+- better correction handling (“no, I meant…”)
+- recency and relevance weighting for memory/context
+- compact session summaries instead of replaying full transcripts
+
+### Presence
+
+- stronger entered/left/returned presence model
+- multi-user handoff when the active speaker changes
+- configurable room/device presence sources
+- presence-aware proactive notifications
+- suppress interruptions when nobody relevant is present
+
+### Proactive behavior
+
+- priority/expiry for queued notifications
+- “tell me when…” local conditions and reminders
+- better quiet-hours and cooldown policy
+- defer/retry delivery when the user is busy or absent
+- explain why a proactive message fired
+
+### Agent orchestration
+
+- clearer task routing between local skills and OpenClaw agents
+- explicit agent capability metadata
+- cancellable long-running agent actions
+- visible action/tool timeline
+- safer permission escalation for privileged skills/actions
+
+### Control Deck
+
+- live latency/health dashboard
+- memory browser/editor
+- presence view
+- active agent/tool view
+- proactive queue
+- benchmark history
+- clearer degraded-state and repair controls
+
+7.4 should be developed behind measured 7.3 baselines. A feature that materially worsens normal voice-turn latency needs a documented reason.
+
+## Later — Jervis 7.5+ Ecosystem
+
+Possible direction after 7.4 is stable:
+
+- richer skill packaging/discovery
+- MCP server/client management
+- external device/room adapters
+- plugin permission manifests
+- remote Control Deck access with explicit security boundaries
+- broader automation/event integrations
+
+## Standing engineering rules
+
+- Measure before and after performance work.
+- Prefer the simplest language/runtime for each component; Rust/native code is welcome where it produces a real hot-path benefit.
+- Keep portable fallbacks when practical.
+- Do not add a local LLM merely to claim “local AI”; local inference must have a concrete latency/privacy/offline goal.
+- Every release description must be derived from the actual code diff and document **Added / Changed / Removed / Fixed** behavior.
+- Stable release binaries must pass their own runtime/backend verification before publication.

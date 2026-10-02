@@ -94,5 +94,13 @@ fetch "$BASE/SHA256SUMS" "$tmp/SHA256SUMS"
 verify_sha256 "$tmp/$asset" "$tmp/SHA256SUMS" "$asset"
 chmod +x "$tmp/$asset"
 
-say "Jervis: verified. Starting installer..."
+printf '\n'
+say "┌─ JERVIS BOOTSTRAP ─────────────────────────────┐"
+say "│ target   $asset"
+say "│ verify   SHA-256 ✓"
+say "│ state    native payload ready"
+say "└─ launching installation control deck ──────────┘"
+printf '\007'
+sleep 0.06
+printf '\007'
 exec "$tmp/$asset"

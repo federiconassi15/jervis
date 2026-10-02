@@ -5,12 +5,16 @@ import platform
 import random
 import shutil
 import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 
 import numpy as np
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
+from textual.css.query import NoMatches
 from textual.widgets import (
     Button,
     Input,
@@ -38,6 +42,53 @@ BANTER = [
     "Private state. Explicit permissions.",
     "Voice, memory, agents — one system.",
 ]
+
+
+_CUE_PATTERNS: dict[str, tuple[tuple[int, int], ...]] = {
+    "boot": ((760, 55), (980, 70)),
+    "install": ((880, 45), (1120, 70)),
+    "complete": ((1040, 65), (1320, 90)),
+    "attention": ((720, 75), (720, 75), (480, 135)),
+}
+
+
+def _terminal_cue(kind: str) -> None:
+    """Emit a short terminal-style cue without adding an audio dependency."""
+    disabled = os.environ.get("JERVIS_TERMINAL_CUES", "1").strip().lower()
+    if disabled in {"0", "false", "no", "off"}:
+        return
+
+    force = os.environ.get("JERVIS_FORCE_TERMINAL_CUES", "").strip().lower()
+    if force not in {"1", "true", "yes", "on"}:
+        if not getattr(sys.stdout, "isatty", lambda: False)():
+            return
+
+    pattern = _CUE_PATTERNS.get(kind, _CUE_PATTERNS["attention"])
+
+    def play() -> None:
+        if platform.system() == "Windows":
+            try:
+                import winsound
+                for frequency, duration_ms in pattern:
+                    winsound.Beep(frequency, duration_ms)
+                    time.sleep(0.025)
+                return
+            except Exception:
+                pass
+
+        for _frequency, duration_ms in pattern:
+            try:
+                sys.stdout.write("\a")
+                sys.stdout.flush()
+            except Exception:
+                return
+            time.sleep(max(0.04, duration_ms / 1000.0))
+
+    threading.Thread(
+        target=play,
+        name="jervis-terminal-cue",
+        daemon=True,
+    ).start()
 
 
 class JervisInstaller(App[int]):
@@ -256,10 +307,10 @@ class JervisInstaller(App[int]):
         self.pulse_frames = ["◐", "◓", "◑", "◒"]
         self.scan_frames = ["·", "•", "◆", "•"]
         self.hero_frames = [
-            "J  E  R  V  I  S",
-            "J · E · R · V · I · S",
-            "J  E  R  V  I  S",
-            "J  E  R  V  I  S",
+            "╭──────────── J  E  R  V  I  S ────────────╮",
+            "╭──────────── J · E · R · V · I · S ────────────╮",
+            "╭──────────── J  E  R  V  I  S ────────────╮",
+            "╭──────────── J  E  R  V  I  S ────────────╮",
         ]
         self.pulse_index = 0
         self.animation_tick = 0
@@ -328,21 +379,26 @@ class JervisInstaller(App[int]):
 
     def compose(self) -> ComposeResult:
         with Container(id="frame"):
-            yield Static("JERVIS " + __version__ + "  ·  SETUP", id="topline")
+            yield Static(
+                "┌─ SYSTEM BOOTSTRAP // JERVIS " + __version__ + " ─┐",
+                id="topline",
+            )
             with Horizontal():
                 yield Static("◐", id="pulse")
                 yield Static(
-                    "J  E  R  V  I  S\nSETUP",
+                    "╭──────────── J  E  R  V  I  S ────────────╮\n"
+                    "│        INSTALLATION CONTROL DECK         │\n"
+                    "╰──────────────────────────────────────────╯",
                     id="hero",
                 )
-            yield Static(self.tagline, id="tagline")
+            yield Static("‹ " + self.tagline + " ›", id="tagline")
             yield Static("", id="stepbar")
             yield Static("SYSTEM CHECK · READY", id="system-line")
             yield Static("", id="context")
 
             with ContentSwitcher(initial="page-mode", id="pages"):
                 with VerticalScroll(classes="page", id="page-mode"):
-                    yield Static("Where will Jervis live?", classes="title")
+                    yield Static("┌─ 01 // DEPLOYMENT MODE ───────────────────┐", classes="title")
                     yield Static(
                         "Desktop follows your normal login and audio session. "
                         "Server is tuned for an always-on machine.",
@@ -363,7 +419,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-brain"):
-                    yield Static("Connect the OpenClaw brain", classes="title")
+                    yield Static("┌─ 02 // OPENCLAW BRAIN ─────────────────────┐", classes="title")
                     yield Static(
                         "Jervis sets up OpenClaw automatically. "
                         "You only leave this screen for a required sign-in.",
@@ -394,7 +450,7 @@ class JervisInstaller(App[int]):
                         yield Switch(value=True, id="openclaw-install")
 
                 with VerticalScroll(classes="page", id="page-audio"):
-                    yield Static("Choose how Jervis hears and speaks", classes="title")
+                    yield Static("┌─ 03 // AUDIO MATRIX ───────────────────────┐", classes="title")
                     yield Static(
                         "Pick the microphone and output Jervis should own.",
                         classes="hint",
@@ -422,7 +478,7 @@ class JervisInstaller(App[int]):
                         yield Switch(value=True, id="autostart")
 
                 with VerticalScroll(classes="page", id="page-identity"):
-                    yield Static("Create the owner profile", classes="title")
+                    yield Static("┌─ 04 // IDENTITY CORE ──────────────────────┐", classes="title")
                     yield Static(
                         "Your local owner profile controls identity, permissions, and authentication.",
                         classes="hint",
@@ -450,7 +506,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-review"):
-                    yield Static("Ready to build Jervis", classes="title")
+                    yield Static("┌─ 05 // FINAL REVIEW ───────────────────────┐", classes="title")
                     yield Static("", id="review")
                     yield Static(
                         "Nothing is committed until the transactional install reaches its final checks.",
@@ -458,7 +514,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-install"):
-                    yield Static("Building Jervis", classes="title")
+                    yield Static("┌─ 06 // INSTALLATION SEQUENCE ──────────────┐", classes="title")
                     yield LoadingIndicator()
                     yield Static("Preparing…", id="progress-status")
                     yield Static("", id="progress-detail")
@@ -469,11 +525,12 @@ class JervisInstaller(App[int]):
                     yield Button("Finish", id="finish-button", variant="primary")
 
             with Horizontal(id="nav"):
-                yield Static("↑↓ move   ←→ change choice / navigate   mouse enabled", id="nav-hint")
+                yield Static("└─ ↑↓ MOVE · ←→ NAVIGATE · ENTER SELECT · MOUSE ONLINE ─", id="nav-hint")
                 yield Button("Back", id="back")
                 yield Button("Next", id="next", variant="primary")
 
     def on_mount(self) -> None:
+        _terminal_cue("boot")
         self.query_one("#auth-button", Button).display = False
         self.query_one("#finish-button", Button).display = False
         self.set_interval(0.12, self._pulse_tick)
@@ -482,38 +539,51 @@ class JervisInstaller(App[int]):
         self.query_one("#mode", Select).focus()
 
     def _pulse_tick(self) -> None:
+        # Textual may deliver one final timer tick while the test/app screen is
+        # being torn down. Treat that as normal lifecycle cleanup rather than
+        # querying widgets that no longer exist.
+        try:
+            pulse = self.query_one("#pulse", Static)
+            hero_widget = self.query_one("#hero", Static)
+        except NoMatches:
+            return
+
         self.animation_tick += 1
         self.pulse_index = (self.pulse_index + 1) % len(self.pulse_frames)
-        self.query_one("#pulse", Static).update(self.pulse_frames[self.pulse_index])
+        pulse.update(self.pulse_frames[self.pulse_index])
 
         hero = self.hero_frames[(self.animation_tick // 2) % len(self.hero_frames)]
-        self.query_one("#hero", Static).update(hero + "\nSETUP")
+        hero_widget.update(
+            hero
+            + "\n│        INSTALLATION CONTROL DECK         │"
+            + "\n╰──────────────────────────────────────────╯"
+        )
 
         scan = self.scan_frames[self.animation_tick % len(self.scan_frames)]
         if self.transition_ticks > 0:
             self.transition_ticks -= 1
             self.query_one("#system-line", Static).update(
-                scan + "  switching view"
+                "├─ " + scan + "  switching subsystem ─┤"
             )
         elif self.step == 5 and not self.core_installed:
             self.query_one("#system-line", Static).update(
-                scan + "  installing"
+                "├─ " + scan + "  installation sequence active ─┤"
             )
             self.query_one("#progress-status", Static).update(
                 scan + "  " + self.progress_title
             )
         elif self.core_installed:
             self.query_one("#system-line", Static).update(
-                "●  installed and verified"
+                "╰─ ●  installation verified // systems nominal ─╯"
             )
         else:
             self.query_one("#system-line", Static).update(
-                scan + "  ready"
+                "├─ " + scan + "  systems ready ─┤"
             )
 
         if self.animation_tick % 80 == 0 and self.step < 5:
             self.tagline = random.choice(BANTER)
-            self.query_one("#tagline", Static).update(self.tagline)
+            self.query_one("#tagline", Static).update("‹ " + self.tagline + " ›")
 
     def _platform_summary(self) -> str:
         return (
@@ -574,13 +644,14 @@ class JervisInstaller(App[int]):
     def _render_stepbar(self) -> None:
         parts = []
         for index, name in enumerate(self.STEPS):
+            number = str(index + 1).zfill(2)
             if index < self.step:
-                parts.append("✓ " + name)
+                parts.append("✓" + number + " " + name.upper())
             elif index == self.step:
-                parts.append("[" + name.upper() + "]")
+                parts.append("╢" + number + " " + name.upper() + "╟")
             else:
-                parts.append("· " + name)
-        self.query_one("#stepbar", Static).update("   ".join(parts))
+                parts.append("·" + number + " " + name.upper())
+        self.query_one("#stepbar", Static).update(" ── ".join(parts))
 
     def _switch(self, step: int) -> None:
         self.step = max(0, min(step, len(self.STEPS) - 1))
@@ -835,8 +906,11 @@ class JervisInstaller(App[int]):
                     self.plan.openclaw_auth,
                 )
         except Exception as exc:
+            _terminal_cue("attention")
             self.query_one("#error-mark", Static).update(
-                "OpenClaw sign-in did not finish\n" + str(exc)
+                "╭─ ! OPENCLAW ATTENTION REQUIRED ─╮\n"
+                + str(exc)
+                + "\n╰─ Jervis core remains installed ─╯"
             )
             self.query_one("#progress-status", Static).update(
                 "Jervis is installed. OpenClaw sign-in can be retried later."
@@ -905,8 +979,10 @@ class JervisInstaller(App[int]):
         try:
             self.plan.validate()
         except Exception as exc:
+            _terminal_cue("attention")
             self.notify(str(exc), title="Review", severity="warning")
             return
+        _terminal_cue("install")
         self._switch(5)
         self.query_one("#progress", ProgressBar).update(progress=0)
         self.progress_title = "Initializing transactional installer"
@@ -971,9 +1047,12 @@ class JervisInstaller(App[int]):
         )
 
     def _install_failed(self, message: str) -> None:
+        _terminal_cue("attention")
         self.query_one(LoadingIndicator).display = False
         self.query_one("#error-mark", Static).update(
-            "Installation stopped safely\n" + message
+            "╭─ ! ATTENTION // INSTALL HALTED ─╮\n"
+            + message
+            + "\n╰─ rollback boundary preserved ──╯"
         )
         self.query_one("#progress-status", Static).update("Nothing half-installed was left active.")
         self.query_one("#progress-detail", Static).update(
@@ -998,6 +1077,7 @@ class JervisInstaller(App[int]):
             and self.plan.openclaw_auth != "later"
         )
         if needs_auth:
+            _terminal_cue("attention")
             self.query_one("#progress-status", Static).update(
                 "Jervis is installed. One sign-in remains."
             )
@@ -1006,10 +1086,15 @@ class JervisInstaller(App[int]):
             self._show_done()
 
     def _show_done(self) -> None:
+        _terminal_cue("complete")
         self.query_one("#auth-button", Button).display = False
-        self.query_one("#progress-status", Static).update("Installation complete")
+        self.query_one("#progress-status", Static).update(
+            "╰─ INSTALLATION COMPLETE // SYSTEMS NOMINAL ─╯"
+        )
         self.query_one("#done-mark", Static).update(
-            "✓  JERVIS 7.1 READY\nVoice · identity · memory · OpenClaw"
+            "╭──────────── ✓ JERVIS " + __version__ + " READY ────────────╮\n"
+            "│      VOICE · IDENTITY · MEMORY · OPENCLAW ONLINE      │\n"
+            "╰──────────────────────────────────────────────────────╯"
         )
         self.query_one("#finish-button", Button).display = True
 

@@ -2,7 +2,7 @@ import asyncio
 
 import jervis.installer as installer_module
 from jervis.install_plan import InstallPlan
-from jervis.installer import JervisInstaller, install
+from jervis.installer import JervisInstaller, _terminal_cue, install
 
 
 def test_install_plan_validation():
@@ -106,3 +106,8 @@ def test_installer_arrow_navigation():
             assert app.step == 0
 
     asyncio.run(scenario())
+
+
+def test_terminal_cues_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("JERVIS_TERMINAL_CUES", "0")
+    _terminal_cue("attention")

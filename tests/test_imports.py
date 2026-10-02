@@ -9,6 +9,7 @@ MODULES = [
     "jervis.audio.desktop",
     "jervis.audio.devices",
     "jervis.brain.openclaw",
+    "jervis.benchmark",
     "jervis.cli",
     "jervis.config",
     "jervis.doctor",
