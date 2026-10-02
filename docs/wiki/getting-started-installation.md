@@ -1,61 +1,40 @@
 # Getting Started: Installation
 
-## Purpose
+## Public install
 
-This page documents **Installation** in the **Getting Started** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.
+Jervis ships self-contained native binaries. The bootstrap detects the host platform, downloads the matching release asset, verifies SHA-256, and launches the native installer.
 
-## How it works
+### Linux / macOS
 
-Jervis keeps OS-specific behavior behind platform adapters while the voice loop, identity sessions, permissions, state, skills, and OpenClaw routing remain shared. Installation should therefore behave consistently even when the host operating system uses a different audio API, startup manager, or filesystem convention.
+    curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
 
-For the 7.1 reliability line, the default interaction is: wake word → **Boss?** acknowledgement → capture the full natural command → evaluate the trusted session and speaker evidence → route locally or through OpenClaw → keep the same speaker locked through the follow-up window.
+### Windows PowerShell
 
-## Desktop and Server behavior
+    irm https://raw.githubusercontent.com/federiconassi15/jervis/main/install.ps1 | iex
 
-**Desktop mode** uses the user's normal computer audio devices. Setup enumerates available microphones and outputs and asks which ones Jervis should use. An Android phone may be selected as the microphone.
+## What happens next
 
-**Server mode** uses the same runtime but emphasizes persistent startup, explicit device choices, and remote-friendly diagnostics. It is suitable for a NUC, home server, workstation, or other always-on machine.
+The native installer opens the Installation Control Deck and walks through deployment mode, OpenClaw, audio, identity, review, and the transactional installation sequence.
 
-## Cross-platform notes
+In 7.3.1 the bootstrap and installer also use Unicode framing and short terminal-native cues for boot, attention, install start, and completion.
 
-- **Linux:** managed startup uses a systemd user service where available.
-- **Windows:** per-user managed startup uses Task Scheduler.
-- **macOS:** managed startup uses launchd.
-- Desktop audio is exposed through the host PortAudio backend.
-- Android AudioSource uses ADB forwarding to a localhost TCP socket, so the Jervis-side transport is shared across all three operating systems.
+## After installation
 
-## Reliability rules
+    jervis
+    jervis doctor
+    jervis runtime-info
+    jervis benchmark
+    jervis benchmark --json
 
-1. Do not turn one noisy voice sample into an authentication loop.
-2. Keep expensive speech and speaker models lazy where practical.
-3. Bound histories, queues, caches, and stored embeddings.
-4. Repair the smallest failed component before restarting the whole runtime.
-5. Keep the local shell useful when OpenClaw or a model provider is unavailable.
-6. Treat speaker recognition as a convenience identity signal, not high-assurance security.
+`jervis benchmark` is part of the 7.3.1 hardening line and reports local hot-path measurements plus recent live latency samples when available.
 
-## Privacy and security
+## Privacy
 
-Never commit provider credentials, authentication passphrases, voiceprints, raw recordings, private dialogue, Android serial numbers, private IP addresses, or personal filesystem paths. Jervis stores authentication passphrases as PBKDF2-HMAC-SHA256 verifiers rather than plaintext. Raw microphone audio is not intended to be persisted by default.
-
-## Diagnostics
-
-Start with `jervis doctor`. For agentic-brain problems, also use `openclaw doctor`. The Control Deck timeline should show wake, identity, routing, provider, and repair events with timestamps so failures can be diagnosed without guessing.
-
-When debugging Installation, verify configuration and selected devices before changing recognition thresholds. Threshold changes should be a last step after confirming that audio quality and session state are healthy.
-
-## Development checklist
-
-- Test the normal path.
-- Test at least one failure path.
-- Consider Windows, macOS, and Linux behavior.
-- Consider Desktop and Server modes.
-- Avoid blocking or hot-polling work in the always-on loop.
-- Avoid logging secrets or authentication text.
-- Preserve rollback and doctor behavior when setup files change.
+Do not commit credentials, passphrases, raw recordings, voiceprints, private dialogue, device serials, private IP addresses, or personal paths.
 
 ## Related pages
 
 - [Getting Started index](getting-started-index.md)
-- [Wiki Home](Home.md)
-- [Previous](getting-started-requirements.md)
-- [Next](getting-started-first-run.md)
+- [Installer](installer-index.md)
+- [First Run](getting-started-first-run.md)
+- [Doctor](getting-started-doctor.md)
