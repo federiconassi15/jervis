@@ -49,11 +49,11 @@ jobs:
           WIKI_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.wiki.git
         run: |
           set -euo pipefail
-          git clone "$WIKI_URL" wiki || {
-            mkdir wiki
-            git -C wiki init
-            git -C wiki remote add origin "$WIKI_URL"
-          }
+          if ! git clone "$WIKI_URL" wiki; then
+            echo "::error::GitHub Wiki is enabled but has not been initialized yet."
+            echo "::error::Open https://github.com/${{ github.repository }}/wiki, create the first page once, then rerun this workflow."
+            exit 1
+          fi
 
           find wiki -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a wiki-publish/. wiki/
