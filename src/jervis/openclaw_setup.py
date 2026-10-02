@@ -10,6 +10,8 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
+from .openclaw_providers import provider
+
 Progress = Callable[[str], None]
 
 
@@ -30,7 +32,6 @@ def find_openclaw() -> Path | None:
         candidates += [
             home / ".npm-global" / "bin" / "openclaw",
             home / ".local" / "bin" / "openclaw",
-            home / ".openclaw" / "bin" / "openclaw",
             Path("/opt/homebrew/bin/openclaw"),
             Path("/usr/local/bin/openclaw"),
         ]
@@ -63,8 +64,11 @@ def run(
     *args: str,
     interactive: bool = True,
     timeout: float | None = None,
+    env_extra: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     kwargs = {"check": False, "text": True, "timeout": timeout}
+    if env_extra:
+        kwargs["env"] = {**os.environ, **env_extra}
     if not interactive:
         kwargs["capture_output"] = True
 
@@ -143,7 +147,7 @@ def doctor(cli: Path) -> tuple[bool, str]:
     return proc.returncode == 0, detail[-3000:]
 
 
-def _provider_onboard_args(plan) -> list[str]:
+def _base_onboard_args(plan) -> list[str]:
     args = [
         "onboard",
         "--non-interactive",
@@ -193,28 +197,85 @@ def _provider_onboard_args(plan) -> list[str]:
             plan.openclaw_gateway_secret,
         ]
 
-    auth = plan.openclaw_auth
+    return args
+
+
+def _provider_environment(plan) -> dict[str, str]:
     key = plan.openclaw_api_key.strip()
-    if auth == "openai-api-key":
-        args += ["--auth-choice", "openai-api-key", "--openai-api-key", key]
-    elif auth == "anthropic-api-key":
-        args += ["--auth-choice", "apiKey", "--anthropic-api-key", key]
-    elif auth == "gemini-api-key":
-        args += ["--auth-choice", "gemini-api-key", "--gemini-api-key", key]
-    elif auth == "openrouter-api-key":
-        args += ["--auth-choice", "openrouter-api-key", "--openrouter-api-key", key]
-    elif auth == "mistral-api-key":
-        args += ["--auth-choice", "mistral-api-key", "--mistral-api-key", key]
-    elif auth == "zai-api-key":
-        args += ["--auth-choice", "zai-api-key", "--zai-api-key", key]
-    elif auth == "github-copilot":
-        args += [
-            "--auth-choice",
-            "github-copilot",
-            "--github-copilot-token",
-            key,
-        ]
-    elif auth == "custom-api-key":
+    if not key:
+        return {}
+
+    if plan.openclaw_auth == "custom-api-key":
+        return {"CUSTOM_API_KEY": key}
+    if plan.openclaw_auth == "universal-provider":
+        env_name = plan.openclaw_universal_credential_env.strip()
+        return {env_name: key} if env_name else {}
+
+    spec = provider(plan.openclaw_auth)
+    if spec and spec.credential_env:
+        return {spec.credential_env: key}
+    return {}
+
+
+def _provider_plugin(plan) -> str:
+    if plan.openclaw_auth == "universal-provider":
+        return plan.openclaw_universal_plugin.strip()
+    spec = provider(plan.openclaw_auth)
+    return spec.plugin if spec and spec.plugin else ""
+
+
+def _plugin_id(package: str) -> str:
+    name = package.rsplit("/", 1)[-1]
+    return name.removesuffix("-provider")
+
+
+def _ensure_provider_plugin(cli: Path, plan) -> None:
+    plugin = _provider_plugin(plan)
+    if not plugin:
+        return
+    if not plan.openclaw_accept_plugin_capabilities:
+        raise RuntimeError(
+            "The selected OpenClaw provider requires plugin capability approval."
+        )
+
+    proc = run(
+        cli,
+        "plugins",
+        "install",
+        plugin,
+        "--accept-capabilities",
+        interactive=False,
+        timeout=180,
+    )
+    if proc.returncode == 0:
+        return
+
+    # An already-installed official plugin may reject a second install. Enabling
+    # it with explicit capability consent is the safe idempotent fallback.
+    enable = run(
+        cli,
+        "plugins",
+        "enable",
+        _plugin_id(plugin),
+        "--accept-capabilities",
+        interactive=False,
+        timeout=60,
+    )
+    if enable.returncode == 0:
+        return
+
+    detail = ((proc.stderr or "") + (proc.stdout or "")).strip()[-3000:]
+    raise RuntimeError(
+        "OpenClaw provider plugin installation failed"
+        + (": " + detail if detail else ".")
+    )
+
+
+def _provider_onboard_args(plan) -> list[str]:
+    args = _base_onboard_args(plan)
+    auth = plan.openclaw_auth
+
+    if auth == "custom-api-key":
         args += [
             "--auth-choice",
             "custom-api-key",
@@ -228,58 +289,70 @@ def _provider_onboard_args(plan) -> list[str]:
         provider_id = plan.openclaw_custom_provider_id.strip()
         if provider_id:
             args += ["--custom-provider-id", provider_id]
-        if key:
-            args += ["--custom-api-key", key]
         args.append(
             "--custom-image-input"
             if plan.openclaw_custom_image_input
             else "--custom-text-input"
         )
-    elif auth == "ollama":
+        return args
+
+    if auth == "universal-provider":
         args += [
             "--auth-choice",
-            "ollama",
-            "--custom-base-url",
-            plan.openclaw_custom_base_url.strip(),
+            plan.openclaw_universal_auth_choice.strip(),
         ]
+        if plan.openclaw_custom_base_url.strip():
+            args += ["--custom-base-url", plan.openclaw_custom_base_url.strip()]
         if plan.openclaw_custom_model_id.strip():
             args += ["--custom-model-id", plan.openclaw_custom_model_id.strip()]
-    elif auth == "lmstudio":
-        args += [
-            "--auth-choice",
-            "lmstudio",
-            "--custom-base-url",
-            plan.openclaw_custom_base_url.strip(),
-        ]
-        if plan.openclaw_custom_model_id.strip():
-            args += ["--custom-model-id", plan.openclaw_custom_model_id.strip()]
-        if key:
-            args += ["--lmstudio-api-key", key]
-    else:
-        raise ValueError("OpenClaw auth mode requires interactive authorization.")
+        return args
+
+    spec = provider(auth)
+    if spec is None:
+        raise ValueError("Unknown OpenClaw provider.")
+    if spec.interactive:
+        raise ValueError("OpenClaw auth mode requires external authorization.")
+
+    args += ["--auth-choice", spec.auth_choice]
+
+    if spec.requires_base_url:
+        args += ["--custom-base-url", plan.openclaw_custom_base_url.strip()]
+    if spec.local and plan.openclaw_custom_model_id.strip():
+        args += ["--custom-model-id", plan.openclaw_custom_model_id.strip()]
 
     return args
 
 
 def needs_interactive_authorization(plan) -> bool:
-    return plan.openclaw_auth in {"openai", "xai-oauth"}
+    spec = provider(plan.openclaw_auth)
+    return bool(spec and spec.interactive)
+
+
+def _redact_detail(detail: str, plan) -> str:
+    for secret in (plan.openclaw_api_key, plan.openclaw_gateway_secret):
+        if secret:
+            detail = detail.replace(secret, "[REDACTED]")
+    return detail
 
 
 def configure_noninteractive(cli: Path, plan) -> None:
-    """Run OpenClaw onboarding entirely behind the Jervis installer."""
+    """Run any non-OAuth OpenClaw provider setup behind Jervis."""
     if plan.openclaw_auth == "later":
         return
     if needs_interactive_authorization(plan):
         return
 
+    _ensure_provider_plugin(cli, plan)
     proc = run(
         cli,
         *_provider_onboard_args(plan),
         interactive=False,
         timeout=300,
+        env_extra=_provider_environment(plan),
     )
     if proc.returncode != 0:
         detail = ((proc.stderr or "") + (proc.stdout or "")).strip()[-3000:]
+        detail = _redact_detail(detail, plan)
         if not detail:
             detail = "OpenClaw onboarding returned a non-zero exit code."
         raise RuntimeError("OpenClaw hidden onboarding failed: " + detail)
@@ -331,7 +404,7 @@ def _apply_gateway_after_auth(cli: Path, plan) -> None:
 
 
 def configure_interactive_authorization(cli: Path, plan) -> None:
-    """Handle only external provider authorization, then apply Jervis choices."""
+    """Handle external provider authorization, then apply Jervis choices."""
     auth_mode = plan.openclaw_auth
     if auth_mode == "openai":
         method = "device-code" if plan.mode == "server" else "oauth"
@@ -365,7 +438,10 @@ def configure_interactive_authorization(cli: Path, plan) -> None:
         if proc.returncode != 0:
             raise RuntimeError("xAI/Grok sign-in did not complete.")
     else:
-        return
+        raise RuntimeError(
+            "This provider uses an external authorization route that Jervis "
+            "does not yet have a provider-specific authorization adapter for."
+        )
 
     _apply_gateway_after_auth(cli, plan)
 

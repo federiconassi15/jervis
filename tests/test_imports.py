@@ -19,6 +19,7 @@ MODULES = [
     "jervis.installer",
     "jervis.models",
     "jervis.openclaw_setup",
+    "jervis.openclaw_providers",
     "jervis.paths",
     "jervis.permissions",
     "jervis.router",

@@ -22,6 +22,24 @@ Provider and Gateway secrets are masked in the installer and are never shown on 
 
 ## Supported model/auth routes
 
+The provider picker is data-driven and includes a large current OpenClaw catalog covering direct vendor APIs, hosted gateways, local runtimes, and official provider plugins.
+
+Current first-class choices include OpenAI, Anthropic, Gemini, OpenRouter, Mistral, Z.AI variants, Vercel AI Gateway, Arcee, Cerebras, Hugging Face, Fireworks, Together, DeepSeek, Groq, DeepInfra, Cohere, ClawRouter, Tencent TokenHub/TokenPlan, NVIDIA, Featherless, LiteLLM, Meta, Qwen, GMI Cloud, Baseten, Kilo Gateway, Moonshot/Kimi, MiniMax API, Synthetic, Runway, Alibaba Model Studio, Ollama, LM Studio, vLLM, and llama.cpp.
+
+### Universal OpenClaw Provider
+
+For an OpenClaw provider added after the current Jervis release, choose **Any OpenClaw provider · advanced pass-through** and enter:
+
+- the OpenClaw `--auth-choice` id
+- the provider credential environment-variable name, when required
+- the credential itself
+- an optional official OpenClaw plugin package
+- optional base URL/model values where that provider uses them
+
+Jervis still runs onboarding with `--non-interactive`; the raw OpenClaw wizard remains hidden.
+
+## Supported model/auth routes
+
 Jervis currently exposes:
 
 - ChatGPT / Codex subscription

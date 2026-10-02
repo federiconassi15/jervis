@@ -60,7 +60,8 @@ def test_openai_api_key_builds_hidden_noninteractive_onboarding():
     assert args[:3] == ["onboard", "--non-interactive", "--accept-risk"]
     assert "--auth-choice" in args
     assert "openai-api-key" in args
-    assert "--openai-api-key" in args
+    assert "--openai-api-key" not in args
+    assert "secret" not in args
     assert "--skip-ui" in args
     assert "--install-daemon" in args
     assert "--gateway-bind" in args
@@ -104,7 +105,7 @@ def test_oauth_routes_require_external_authorization():
         _base_plan(openclaw_auth="xai-oauth")
     )
     assert not setup.needs_interactive_authorization(
-        _base_plan(openclaw_auth="anthropic-api-key", openclaw_api_key="secret")
+        _base_plan(openclaw_auth="apiKey", openclaw_api_key="secret")
     )
 
 
@@ -153,3 +154,76 @@ def test_configure_noninteractive_never_uses_raw_wizard(monkeypatch):
     assert args[0] == "onboard"
     assert "--non-interactive" in args
     assert kwargs["interactive"] is False
+    assert kwargs["env_extra"]["MISTRAL_API_KEY"] == "secret"
+    assert "secret" not in args
+
+
+def test_universal_provider_passes_future_auth_choice_and_env(monkeypatch):
+    plan = _base_plan(
+        openclaw_auth="universal-provider",
+        openclaw_universal_auth_choice="future-ai-api-key",
+        openclaw_universal_credential_env="FUTURE_AI_API_KEY",
+        openclaw_api_key="future-secret",
+    )
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cli: Path, *args, **kwargs):
+        calls.append((cli, args, kwargs))
+        return Result()
+
+    monkeypatch.setattr(setup, "run", fake_run)
+    setup.configure_noninteractive(Path("/tmp/openclaw"), plan)
+
+    _cli, args, kwargs = calls[-1]
+    assert "--auth-choice" in args
+    assert "future-ai-api-key" in args
+    assert kwargs["env_extra"]["FUTURE_AI_API_KEY"] == "future-secret"
+    assert "future-secret" not in args
+
+
+def test_provider_plugin_requires_explicit_capability_consent():
+    plan = _base_plan(
+        openclaw_auth="meta-api-key",
+        openclaw_api_key="secret",
+        openclaw_accept_plugin_capabilities=False,
+    )
+    try:
+        plan.validate_openclaw()
+    except ValueError as exc:
+        assert "plugin capabilities" in str(exc)
+    else:
+        raise AssertionError("expected plugin capability consent error")
+
+
+def test_external_provider_plugin_installs_before_onboarding(monkeypatch):
+    plan = _base_plan(
+        openclaw_auth="meta-api-key",
+        openclaw_api_key="secret",
+        openclaw_accept_plugin_capabilities=True,
+    )
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cli: Path, *args, **kwargs):
+        calls.append(args)
+        return Result()
+
+    monkeypatch.setattr(setup, "run", fake_run)
+    setup.configure_noninteractive(Path("/tmp/openclaw"), plan)
+
+    assert calls[0][:3] == (
+        "plugins",
+        "install",
+        "@openclaw/meta-provider",
+    )
+    assert "--accept-capabilities" in calls[0]
+    assert calls[1][0] == "onboard"

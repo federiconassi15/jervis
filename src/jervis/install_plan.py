@@ -2,22 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
-OPENCLAW_AUTH_CHOICES = {
-    "openai",
-    "openai-api-key",
-    "anthropic-api-key",
-    "gemini-api-key",
-    "openrouter-api-key",
-    "mistral-api-key",
-    "zai-api-key",
-    "xai-oauth",
-    "github-copilot",
-    "custom-api-key",
-    "ollama",
-    "lmstudio",
-    "later",
-}
+from .openclaw_providers import provider
 
 
 @dataclass(slots=True)
@@ -26,6 +11,7 @@ class InstallPlan:
     install_openclaw: bool = True
     openclaw_auth: str = "openai"
     openclaw_accept_risk: bool = False
+    openclaw_accept_plugin_capabilities: bool = False
     openclaw_agent_name: str = "main"
     openclaw_api_key: str = field(default="", repr=False)
     openclaw_gateway_bind: str = "loopback"
@@ -43,6 +29,9 @@ class InstallPlan:
     openclaw_custom_provider_id: str = ""
     openclaw_custom_compatibility: str = "openai"
     openclaw_custom_image_input: bool = False
+    openclaw_universal_auth_choice: str = ""
+    openclaw_universal_credential_env: str = ""
+    openclaw_universal_plugin: str = ""
     source_kind: str = "desktop"
     input_device: int | None = None
     android_serial: str | None = None
@@ -52,8 +41,13 @@ class InstallPlan:
     honorific: str = "sir"
     passphrase: str = field(default="", repr=False)
 
+    def effective_openclaw_auth_choice(self) -> str:
+        if self.openclaw_auth == "universal-provider":
+            return self.openclaw_universal_auth_choice.strip()
+        return self.openclaw_auth
+
     def validate_openclaw(self) -> None:
-        if self.openclaw_auth not in OPENCLAW_AUTH_CHOICES:
+        if not self.openclaw_auth.strip():
             raise ValueError("Choose a valid OpenClaw setup option.")
 
         if self.openclaw_auth == "later":
@@ -85,17 +79,31 @@ class InstallPlan:
         if self.openclaw_node_manager not in {"npm", "pnpm", "bun"}:
             raise ValueError("Choose npm, pnpm, or bun for OpenClaw skills.")
 
-        key_auth = {
-            "openai-api-key",
-            "anthropic-api-key",
-            "gemini-api-key",
-            "openrouter-api-key",
-            "mistral-api-key",
-            "zai-api-key",
-            "github-copilot",
-        }
-        if self.openclaw_auth in key_auth and not self.openclaw_api_key.strip():
-            raise ValueError("Enter the provider credential for OpenClaw.")
+        if self.openclaw_auth == "universal-provider":
+            if not self.openclaw_universal_auth_choice.strip():
+                raise ValueError("Enter the OpenClaw auth-choice id.")
+            env_name = self.openclaw_universal_credential_env.strip()
+            if env_name and not env_name.replace("_", "").isalnum():
+                raise ValueError(
+                    "The provider credential environment variable must contain only letters, numbers, and underscores."
+                )
+            if self.openclaw_api_key.strip() and not env_name:
+                raise ValueError(
+                    "Enter the provider credential environment variable name."
+                )
+            if env_name and not self.openclaw_api_key.strip():
+                raise ValueError("Enter the provider credential.")
+            plugin = self.openclaw_universal_plugin.strip()
+            if plugin:
+                if not plugin.startswith("@openclaw/"):
+                    raise ValueError(
+                        "Automatic capability approval is limited to official @openclaw provider plugins."
+                    )
+                if not self.openclaw_accept_plugin_capabilities:
+                    raise ValueError(
+                        "Approve required OpenClaw provider plugin capabilities before continuing."
+                    )
+            return
 
         if self.openclaw_auth == "custom-api-key":
             if not self.openclaw_custom_base_url.strip():
@@ -108,10 +116,27 @@ class InstallPlan:
                 "anthropic",
             }:
                 raise ValueError("Choose a valid custom provider compatibility mode.")
+            return
 
-        if self.openclaw_auth in {"ollama", "lmstudio"}:
-            if not self.openclaw_custom_base_url.strip():
-                raise ValueError("Enter the local provider base URL.")
+        spec = provider(self.openclaw_auth)
+        if spec is None:
+            raise ValueError(
+                "This OpenClaw provider is not in the current Jervis catalog. "
+                "Choose Any OpenClaw provider for pass-through setup."
+            )
+
+        if (
+            spec.credential_env
+            and not spec.credential_optional
+            and not self.openclaw_api_key.strip()
+        ):
+            raise ValueError("Enter the provider credential for OpenClaw.")
+        if spec.requires_base_url and not self.openclaw_custom_base_url.strip():
+            raise ValueError("Enter the provider base URL.")
+        if spec.plugin and not self.openclaw_accept_plugin_capabilities:
+            raise ValueError(
+                "Approve required OpenClaw provider plugin capabilities before continuing."
+            )
 
     def validate(self) -> None:
         if self.mode not in {"desktop", "server"}:

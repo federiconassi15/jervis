@@ -14,6 +14,12 @@ For ChatGPT/Codex or xAI OAuth, Jervis completes every local configuration choic
 
 For a Server install using ChatGPT/Codex, Jervis selects device-code authentication. You can approve the code in a browser on another computer or phone while the server remains headless.
 
+## Any OpenClaw provider
+
+The provider picker contains a large built-in catalog. If the provider you need is newer than the installed Jervis catalog, choose **Any OpenClaw provider · advanced pass-through**.
+
+Enter the auth-choice id documented by OpenClaw and, if needed, the provider's credential environment-variable name and official plugin package. Jervis keeps the flow non-interactive and behind the Installation Control Deck.
+
 ## Provider secrets
 
 Secrets are masked while typing and are not shown on the review screen.

@@ -30,6 +30,7 @@ from textual.widgets import (
 from .audio.devices import default_devices, list_devices
 from .install_engine import TOTAL_STEPS, run_install
 from .install_plan import InstallOutcome, InstallPlan
+from .openclaw_providers import provider, select_options
 from .openclaw_setup import configure_interactive_authorization, find_openclaw
 from .prereqs import ensure_linux_audio, find_adb
 from .version import __version__
@@ -320,21 +321,7 @@ class JervisInstaller(App[int]):
         self.inputs, self.outputs, self.androids = self._detect_audio()
         self.select_values = {
             "mode": ["desktop", "server"],
-            "openclaw-auth": [
-                "openai",
-                "openai-api-key",
-                "anthropic-api-key",
-                "gemini-api-key",
-                "openrouter-api-key",
-                "mistral-api-key",
-                "zai-api-key",
-                "xai-oauth",
-                "github-copilot",
-                "custom-api-key",
-                "ollama",
-                "lmstudio",
-                "later",
-            ],
+            "openclaw-auth": [value for _label, value in select_options()],
             "openclaw-gateway-bind": ["loopback", "auto", "lan", "tailnet"],
             "openclaw-gateway-auth": ["generated-token", "token", "password"],
             "openclaw-daemon-runtime": ["node", "bun"],
@@ -454,21 +441,7 @@ class JervisInstaller(App[int]):
                     )
                     yield Label("AI provider / authentication")
                     yield Select(
-                        [
-                            ("ChatGPT / Codex subscription", "openai"),
-                            ("OpenAI API key", "openai-api-key"),
-                            ("Anthropic API key", "anthropic-api-key"),
-                            ("Google Gemini API key", "gemini-api-key"),
-                            ("OpenRouter API key", "openrouter-api-key"),
-                            ("Mistral API key", "mistral-api-key"),
-                            ("Z.AI API key", "zai-api-key"),
-                            ("xAI / Grok OAuth", "xai-oauth"),
-                            ("GitHub Copilot token", "github-copilot"),
-                            ("Custom OpenAI / Anthropic-compatible provider", "custom-api-key"),
-                            ("Ollama", "ollama"),
-                            ("LM Studio", "lmstudio"),
-                            ("Configure OpenClaw later", "later"),
-                        ],
+                        select_options(),
                         value="openai",
                         allow_blank=False,
                         id="openclaw-auth",
@@ -482,6 +455,24 @@ class JervisInstaller(App[int]):
                         value="main",
                         placeholder="OpenClaw agent name",
                         id="openclaw-agent-name",
+                    )
+
+                    yield Static(
+                        "UNIVERSAL OPENCLAW PROVIDER",
+                        classes="hint",
+                        id="openclaw-universal-title",
+                    )
+                    yield Input(
+                        placeholder="OpenClaw auth-choice id · e.g. future-provider-api-key",
+                        id="openclaw-universal-auth-choice",
+                    )
+                    yield Input(
+                        placeholder="Credential env var · e.g. FUTURE_PROVIDER_API_KEY",
+                        id="openclaw-universal-env",
+                    )
+                    yield Input(
+                        placeholder="Official plugin package · optional",
+                        id="openclaw-universal-plugin",
                     )
 
                     yield Static("CUSTOM / LOCAL PROVIDER", classes="hint", id="openclaw-custom-title")
@@ -571,6 +562,11 @@ class JervisInstaller(App[int]):
                         yield Label("Set up web search")
                         yield Switch(value=True, id="openclaw-search")
 
+                    with Horizontal(classes="card", id="openclaw-plugin-consent-row"):
+                        yield Label(
+                            "Allow required official provider plugin capabilities"
+                        )
+                        yield Switch(value=False, id="openclaw-plugin-capabilities")
                     with Horizontal(classes="card"):
                         yield Label(
                             "I understand OpenClaw agents can use tools and system access"
@@ -663,6 +659,7 @@ class JervisInstaller(App[int]):
         self.query_one("#finish-button", Button).display = False
         self.set_interval(0.12, self._pulse_tick)
         self._render_stepbar()
+        self._refresh_openclaw_fields()
         self._refresh_context()
         self.query_one("#mode", Select).focus()
 
@@ -723,6 +720,48 @@ class JervisInstaller(App[int]):
             + "  ·  bundled runtime"
         )
 
+    def _refresh_openclaw_fields(self) -> None:
+        if not self.is_mounted:
+            return
+        try:
+            auth = str(self.query_one("#openclaw-auth", Select).value)
+            spec = provider(auth)
+            is_custom = auth == "custom-api-key"
+            is_universal = auth == "universal-provider"
+            is_local = bool(spec and spec.local)
+            needs_base = is_custom or is_universal or bool(
+                spec and (spec.local or spec.requires_base_url)
+            )
+            needs_key = is_custom or is_universal or bool(
+                spec and spec.credential_env
+            )
+
+            self.query_one("#openclaw-provider-key", Input).display = needs_key
+            self.query_one("#openclaw-universal-title", Static).display = is_universal
+            self.query_one("#openclaw-universal-auth-choice", Input).display = is_universal
+            self.query_one("#openclaw-universal-env", Input).display = is_universal
+            self.query_one("#openclaw-universal-plugin", Input).display = is_universal
+
+            self.query_one("#openclaw-custom-title", Static).display = needs_base
+            self.query_one("#openclaw-custom-base-url", Input).display = needs_base
+            self.query_one("#openclaw-custom-model-id", Input).display = (
+                is_custom or is_universal or is_local
+            )
+            self.query_one("#openclaw-custom-provider-id", Input).display = is_custom
+            self.query_one("#openclaw-custom-compat", Select).display = is_custom
+            self.query_one("#openclaw-custom-image-row", Horizontal).display = is_custom
+
+            plugin = spec.plugin if spec and spec.plugin else ""
+            if is_universal:
+                plugin = self.query_one(
+                    "#openclaw-universal-plugin", Input
+                ).value.strip()
+            self.query_one(
+                "#openclaw-plugin-consent-row", Horizontal
+            ).display = bool(plugin)
+        except NoMatches:
+            return
+
     def _refresh_context(self) -> None:
         if not self.is_mounted:
             return
@@ -736,22 +775,20 @@ class JervisInstaller(App[int]):
             )
         elif self.step == 1:
             auth = str(self.query_one("#openclaw-auth", Select).value)
-            labels = {
-                "openai": "ChatGPT/Codex subscription · external authorization only",
-                "openai-api-key": "OpenAI API key · hidden onboarding",
-                "anthropic-api-key": "Anthropic API key · hidden onboarding",
-                "gemini-api-key": "Gemini API key · hidden onboarding",
-                "openrouter-api-key": "OpenRouter API key · hidden onboarding",
-                "mistral-api-key": "Mistral API key · hidden onboarding",
-                "zai-api-key": "Z.AI API key · hidden onboarding",
-                "xai-oauth": "xAI/Grok OAuth · external authorization only",
-                "github-copilot": "GitHub Copilot token · hidden onboarding",
-                "custom-api-key": "Custom provider · hidden onboarding",
-                "ollama": "Ollama · hidden onboarding",
-                "lmstudio": "LM Studio · hidden onboarding",
-                "later": "Brain setup deferred · local Jervis remains usable",
-            }
-            text = "Brain  ·  " + labels.get(auth, "select an authentication mode")
+            spec = provider(auth)
+            if spec:
+                suffix = (
+                    " · external authorization"
+                    if spec.interactive
+                    else " · hidden onboarding"
+                )
+                text = "Brain  ·  " + spec.label + suffix
+            elif auth == "custom-api-key":
+                text = "Brain  ·  custom compatible API · hidden onboarding"
+            elif auth == "universal-provider":
+                text = "Brain  ·  universal OpenClaw provider pass-through"
+            else:
+                text = "Brain  ·  setup deferred · local Jervis remains usable"
         elif self.step == 2:
             mic = self.query_one("#microphone", Select).value
             out = self.query_one("#output", Select).value
@@ -834,6 +871,9 @@ class JervisInstaller(App[int]):
                 self.plan.openclaw_accept_risk = bool(
                     self.query_one("#openclaw-risk", Switch).value
                 )
+                self.plan.openclaw_accept_plugin_capabilities = bool(
+                    self.query_one("#openclaw-plugin-capabilities", Switch).value
+                )
                 self.plan.openclaw_agent_name = self.query_one(
                     "#openclaw-agent-name", Input
                 ).value.strip()
@@ -885,6 +925,15 @@ class JervisInstaller(App[int]):
                 self.plan.openclaw_custom_image_input = bool(
                     self.query_one("#openclaw-custom-image", Switch).value
                 )
+                self.plan.openclaw_universal_auth_choice = self.query_one(
+                    "#openclaw-universal-auth-choice", Input
+                ).value.strip()
+                self.plan.openclaw_universal_credential_env = self.query_one(
+                    "#openclaw-universal-env", Input
+                ).value.strip()
+                self.plan.openclaw_universal_plugin = self.query_one(
+                    "#openclaw-universal-plugin", Input
+                ).value.strip()
                 self.plan.validate_openclaw()
             elif self.step == 2:
                 mic_value = self.query_one("#microphone", Select).value
@@ -932,21 +981,18 @@ class JervisInstaller(App[int]):
             if self.plan.source_kind == "android"
             else "Computer microphone #" + str(self.plan.input_device)
         )
-        brain = {
-            "openai": "ChatGPT / Codex subscription",
-            "openai-api-key": "OpenAI API key",
-            "anthropic-api-key": "Anthropic API key",
-            "gemini-api-key": "Google Gemini API key",
-            "openrouter-api-key": "OpenRouter API key",
-            "mistral-api-key": "Mistral API key",
-            "zai-api-key": "Z.AI API key",
-            "xai-oauth": "xAI / Grok OAuth",
-            "github-copilot": "GitHub Copilot token",
-            "custom-api-key": "Custom provider",
-            "ollama": "Ollama",
-            "lmstudio": "LM Studio",
-            "later": "Configure later",
-        }[self.plan.openclaw_auth]
+        spec = provider(self.plan.openclaw_auth)
+        if spec:
+            brain = spec.label
+        elif self.plan.openclaw_auth == "custom-api-key":
+            brain = "Custom compatible provider"
+        elif self.plan.openclaw_auth == "universal-provider":
+            brain = (
+                "OpenClaw pass-through · "
+                + self.plan.openclaw_universal_auth_choice
+            )
+        else:
+            brain = "Configure later"
         lines = [
             "✓  [b]Mode[/b]          " + self.plan.mode.title(),
             "✓  [b]Brain[/b]         " + brain,
@@ -968,7 +1014,8 @@ class JervisInstaller(App[int]):
 
     @on(Select.Changed)
     def selection_changed(self, event: Select.Changed) -> None:
-        del event
+        if event.select.id == "openclaw-auth":
+            self._refresh_openclaw_fields()
         self._refresh_context()
 
     @on(Switch.Changed)
@@ -978,7 +1025,12 @@ class JervisInstaller(App[int]):
 
     @on(Input.Changed)
     def input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "owner-name":
+        if event.input.id == "openclaw-universal-plugin":
+            self._refresh_openclaw_fields()
+        if event.input.id in {
+            "owner-name",
+            "openclaw-universal-auth-choice",
+        }:
             self._refresh_context()
 
     @on(Button.Pressed, "#next")
