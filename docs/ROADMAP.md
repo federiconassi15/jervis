@@ -81,9 +81,9 @@ Before 7.4, the 7.3 line gains a dedicated recovery layer:
 
 The purpose of 7.3.5 is not feature expansion; it is to make 7.4 safer to build and easier to recover when experiments go wrong.
 
-## Now — Jervis 7.4 “Feels Alive”
+## Shipped — Jervis 7.4 “Feels Alive”
 
-**Status: active development on `build/jervis-7.4.0-feels-alive`**
+**Status: completed in 7.4.0**
 
 Primary goal: make Jervis feel continuous, aware, and contextually present **without pretending to be sentient**.
 

@@ -1,4 +1,5 @@
-7.3.6
-Validated implementation commit: 3fe174df8f1a214dc730cf33ec9bb995c46531af
-Validated feature CI: 36997544627
-Purpose: publish Jervis 7.3.6 quiet, resize-safe installer release.
+7.4.0
+Validated implementation commit: 4f3c8919999a833b4c74953117bc57aa99762a85
+Validated feature CI: 37003698226
+Validated main CI: 37004192384
+Purpose: publish Jervis 7.4.0 Feels Alive with the rebuilt installer, continuity, presence, proactive watches, agent orchestration, and Control Deck.
