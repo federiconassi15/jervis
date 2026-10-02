@@ -15,8 +15,33 @@ from .paths import Paths
 Prompt = Callable[[str], bool]
 
 
-def _run(command: list[str]) -> None:
-    subprocess.run(command, check=True)
+def _run(command: list[str], *, quiet: bool = True) -> None:
+    if not quiet:
+        subprocess.run(command, check=True)
+        return
+
+    env = os.environ.copy()
+    env.setdefault("DEBIAN_FRONTEND", "noninteractive")
+    env.setdefault("APT_LISTCHANGES_FRONTEND", "none")
+    proc = subprocess.run(
+        command,
+        text=True,
+        stdin=None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        check=False,
+    )
+    if proc.returncode == 0:
+        return
+
+    lines = (proc.stdout or "").splitlines()
+    tail = "\n".join(lines[-24:])
+    raise RuntimeError(
+        "dependency command failed: "
+        + " ".join(command)
+        + (("\n" + tail) if tail else "")
+    )
 
 
 def _sudo() -> list[str]:
@@ -32,17 +57,23 @@ def _sudo() -> list[str]:
 
 def _linux_install(packages: list[str]) -> None:
     prefix = _sudo()
+    if prefix:
+        # Keep only the authentication prompt visible. Package-manager chatter
+        # is captured by _run and surfaced only when a command fails.
+        _run(prefix + ["-v"], quiet=False)
+        prefix = prefix + ["-n"]
+
     if shutil.which("apt-get"):
-        _run(prefix + ["apt-get", "update"])
-        _run(prefix + ["apt-get", "install", "-y", *packages])
+        _run(prefix + ["apt-get", "-qq", "update"])
+        _run(prefix + ["apt-get", "-qq", "install", "-y", *packages])
     elif shutil.which("dnf"):
-        _run(prefix + ["dnf", "install", "-y", *packages])
+        _run(prefix + ["dnf", "-q", "-y", "install", *packages])
     elif shutil.which("pacman"):
-        _run(prefix + ["pacman", "-S", "--needed", "--noconfirm", *packages])
+        _run(prefix + ["pacman", "-S", "--needed", "--noconfirm", "--quiet", *packages])
     elif shutil.which("zypper"):
-        _run(prefix + ["zypper", "--non-interactive", "install", *packages])
+        _run(prefix + ["zypper", "--non-interactive", "--quiet", "install", *packages])
     elif shutil.which("apk"):
-        _run(prefix + ["apk", "add", *packages])
+        _run(prefix + ["apk", "add", "--quiet", *packages])
     else:
         raise RuntimeError("no supported Linux package manager was found")
 

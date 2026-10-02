@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch {}
 
 $Repo = "federiconassi15/jervis"
@@ -16,10 +17,11 @@ try {
     $Binary = Join-Path $Temp $Asset
     $Sums = Join-Path $Temp "SHA256SUMS"
 
-    Write-Host "Jervis: downloading $Asset..."
+    Write-Host "Jervis · downloading runtime"
     Invoke-WebRequest "$Base/$Asset" -OutFile $Binary -UseBasicParsing
     Invoke-WebRequest "$Base/SHA256SUMS" -OutFile $Sums -UseBasicParsing
 
+    Write-Host "Jervis · verifying release"
     $Expected = $null
     foreach ($Line in Get-Content $Sums) {
         if ($Line -match ("^([0-9a-fA-F]{64})\s+\*?" + [Regex]::Escape($Asset) + "$")) {

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from textual import on, work
+from textual import events, on, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.css.query import NoMatches
@@ -104,31 +104,39 @@ class JervisInstaller(App[int]):
     }
 
     #frame {
-        width: 92%;
+        width: 100%;
         max-width: 108;
         height: 100%;
-        margin: 0 0;
+        margin: 0;
         background: #050d14;
-        padding: 0 3;
+        padding: 0 2;
     }
 
     #topline {
         height: 1;
         color: #2aa8d8;
         content-align: center middle;
+        text-overflow: ellipsis;
+    }
+
+    #hero-row {
+        height: 3;
     }
 
     #hero {
         height: 3;
+        width: 1fr;
         content-align: center middle;
         color: #87e4ff;
         text-style: bold;
+        text-overflow: ellipsis;
     }
 
     #tagline {
         height: 1;
         content-align: center middle;
         color: #66889a;
+        text-overflow: ellipsis;
     }
 
     #stepbar {
@@ -136,6 +144,7 @@ class JervisInstaller(App[int]):
         content-align: center middle;
         color: #537487;
         border-bottom: solid #102a38;
+        text-overflow: ellipsis;
     }
 
     #system-line {
@@ -143,44 +152,62 @@ class JervisInstaller(App[int]):
         content-align: center middle;
         color: #318db0;
         margin-top: 1;
+        text-overflow: ellipsis;
     }
 
     #context {
-        min-height: 2;
+        height: auto;
+        max-height: 3;
+        min-height: 1;
         background: #07151f;
         color: #a5d9eb;
-        padding: 0 2;
+        padding: 0 1;
         margin: 1 0;
+        text-overflow: ellipsis;
     }
 
     #pages {
         height: 1fr;
+        min-height: 1;
         overflow: hidden;
     }
 
     .page {
         height: 100%;
-        padding: 1 2;
+        padding: 1 1;
+        overflow-y: auto;
+        scrollbar-size-vertical: 1;
     }
 
     .title {
-        height: 2;
+        height: auto;
+        min-height: 1;
         color: #d8f6ff;
         text-style: bold;
+        margin-bottom: 1;
+        text-overflow: ellipsis;
     }
 
     .hint {
+        height: auto;
         color: #6f8e9e;
         margin-bottom: 1;
     }
 
     .card {
+        height: auto;
         background: #07151f;
-        padding: 1 2;
+        padding: 1 1;
         margin: 1 0;
     }
 
+    Horizontal {
+        height: auto;
+        min-height: 1;
+    }
+
     Select, Input {
+        width: 100%;
         margin: 1 0;
         background: #06111a;
         border: tall #173c50;
@@ -192,11 +219,11 @@ class JervisInstaller(App[int]):
     }
 
     Switch {
-        margin-left: 2;
+        margin-left: 1;
     }
 
     Button {
-        min-width: 14;
+        min-width: 12;
         margin-right: 1;
         background: #0b1b26;
         color: #cbefff;
@@ -217,6 +244,7 @@ class JervisInstaller(App[int]):
 
     #nav {
         dock: bottom;
+        width: 100%;
         height: 2;
         padding: 0 1;
         border-top: solid #102a38;
@@ -226,66 +254,158 @@ class JervisInstaller(App[int]):
 
     #nav Button {
         height: 1;
+        min-width: 8;
         border: none;
         padding: 0 1;
+        margin-right: 0;
     }
 
     #nav-hint {
         width: 1fr;
+        min-width: 0;
         color: #58788a;
         content-align: left middle;
+        text-overflow: ellipsis;
     }
 
     #pulse {
         width: 3;
+        min-width: 3;
         color: #52d3ff;
         content-align: center middle;
     }
 
     #audio-meter {
-        height: 2;
+        height: auto;
+        min-height: 1;
         color: #75dfff;
         content-align: center middle;
         background: #06131d;
         margin: 1 0;
+        text-overflow: ellipsis;
     }
 
     #progress-status {
-        height: 2;
+        height: auto;
+        min-height: 1;
         color: #c3efff;
         text-style: bold;
         content-align: center middle;
+        text-overflow: ellipsis;
     }
 
     #progress-detail {
-        height: 3;
+        height: auto;
+        min-height: 1;
+        max-height: 5;
         color: #6f93a5;
         content-align: center top;
     }
 
     ProgressBar {
-        margin: 1 4;
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #done-mark, #error-mark {
+        height: auto;
+        min-height: 2;
+        content-align: center middle;
+        text-style: bold;
     }
 
     #done-mark {
-        height: 4;
-        content-align: center middle;
         color: #7df0bd;
-        text-style: bold;
     }
 
     #error-mark {
-        height: 4;
-        content-align: center middle;
         color: #ff8ca5;
-        text-style: bold;
     }
 
     #review {
         background: #07151f;
-        padding: 1 2;
+        padding: 1 1;
         margin: 1 0;
         height: auto;
+    }
+
+    #frame.compact {
+        padding: 0 1;
+    }
+
+    #frame.compact #hero-row {
+        height: 1;
+    }
+
+    #frame.compact #hero {
+        height: 1;
+    }
+
+    #frame.compact #tagline {
+        display: none;
+    }
+
+    #frame.compact #stepbar {
+        height: 1;
+        border-bottom: none;
+    }
+
+    #frame.compact #system-line {
+        display: none;
+    }
+
+    #frame.compact #context {
+        margin: 0;
+        max-height: 1;
+        padding: 0;
+        background: #050d14;
+    }
+
+    #frame.compact .page {
+        padding: 0 1;
+    }
+
+    #frame.compact .card {
+        padding: 0 1;
+        margin: 0 0 1 0;
+    }
+
+    #frame.compact Select, #frame.compact Input {
+        margin: 0 0 1 0;
+    }
+
+    #frame.compact #nav-hint {
+        display: none;
+    }
+
+    #frame.compact #nav {
+        align: center middle;
+        padding: 0;
+    }
+
+    #frame.tiny #hero-row,
+    #frame.tiny #tagline,
+    #frame.tiny #system-line,
+    #frame.tiny #context {
+        display: none;
+    }
+
+    #frame.tiny #topline {
+        text-align: left;
+    }
+
+    #frame.tiny #stepbar {
+        height: 1;
+        border-bottom: none;
+        text-align: left;
+    }
+
+    #frame.tiny .page {
+        padding: 0;
+    }
+
+    #frame.tiny Button {
+        min-width: 6;
     }
     """
 
@@ -316,6 +436,8 @@ class JervisInstaller(App[int]):
         self.pulse_index = 0
         self.animation_tick = 0
         self.transition_ticks = 0
+        self.compact_mode = False
+        self.tiny_mode = False
         self.progress_title = "Preparing…"
         self.progress_detail = ""
         self.inputs, self.outputs, self.androids = self._detect_audio()
@@ -387,7 +509,7 @@ class JervisInstaller(App[int]):
                 "┌─ SYSTEM BOOTSTRAP // JERVIS " + __version__ + " ─┐",
                 id="topline",
             )
-            with Horizontal():
+            with Horizontal(id="hero-row"):
                 yield Static("◐", id="pulse")
                 yield Static(
                     "╭──────────── J  E  R  V  I  S ────────────╮\n"
@@ -402,7 +524,7 @@ class JervisInstaller(App[int]):
 
             with ContentSwitcher(initial="page-mode", id="pages"):
                 with VerticalScroll(classes="page", id="page-mode"):
-                    yield Static("┌─ 01 // DEPLOYMENT MODE ───────────────────┐", classes="title")
+                    yield Static("01 // DEPLOYMENT MODE", classes="title")
                     yield Static(
                         "Desktop follows your normal login and audio session. "
                         "Server is tuned for an always-on machine.",
@@ -423,7 +545,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-brain"):
-                    yield Static("┌─ 02 // OPENCLAW BRAIN ─────────────────────┐", classes="title")
+                    yield Static("02 // OPENCLAW BRAIN", classes="title")
                     yield Static(
                         "Jervis renders OpenClaw's own live setup wizard. "
                         "Providers, API keys, plugins, channels, search, skills, "
@@ -461,7 +583,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-audio"):
-                    yield Static("┌─ 03 // AUDIO MATRIX ───────────────────────┐", classes="title")
+                    yield Static("03 // AUDIO MATRIX", classes="title")
                     yield Static(
                         "Pick the microphone and output Jervis should own.",
                         classes="hint",
@@ -489,7 +611,7 @@ class JervisInstaller(App[int]):
                         yield Switch(value=True, id="autostart")
 
                 with VerticalScroll(classes="page", id="page-identity"):
-                    yield Static("┌─ 04 // IDENTITY CORE ──────────────────────┐", classes="title")
+                    yield Static("04 // IDENTITY CORE", classes="title")
                     yield Static(
                         "Your local owner profile controls identity, permissions, and authentication.",
                         classes="hint",
@@ -517,7 +639,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-review"):
-                    yield Static("┌─ 05 // FINAL REVIEW ───────────────────────┐", classes="title")
+                    yield Static("05 // FINAL REVIEW", classes="title")
                     yield Static("", id="review")
                     yield Static(
                         "Nothing is committed until the transactional install reaches its final checks.",
@@ -525,7 +647,7 @@ class JervisInstaller(App[int]):
                     )
 
                 with VerticalScroll(classes="page", id="page-install"):
-                    yield Static("┌─ 06 // INSTALLATION SEQUENCE ──────────────┐", classes="title")
+                    yield Static("06 // INSTALLATION SEQUENCE", classes="title")
                     yield LoadingIndicator()
                     yield Static("Preparing…", id="progress-status")
                     yield Static("", id="progress-detail")
@@ -563,8 +685,41 @@ class JervisInstaller(App[int]):
                 yield Button("Back", id="back")
                 yield Button("Next", id="next", variant="primary")
 
+    def _apply_responsive_layout(self, width: int, height: int) -> None:
+        if not self.is_mounted:
+            return
+        frame = self.query_one("#frame", Container)
+        compact = width < 76 or height < 24
+        tiny = width < 48 or height < 16
+        self.compact_mode = compact
+        self.tiny_mode = tiny
+        frame.set_class(compact, "compact")
+        frame.set_class(tiny, "tiny")
+
+        top = self.query_one("#topline", Static)
+        top.update(
+            "JERVIS " + __version__ + " // INSTALL"
+            if tiny
+            else "┌─ SYSTEM BOOTSTRAP // JERVIS " + __version__ + " ─┐"
+        )
+
+        hero = self.query_one("#hero", Static)
+        if compact:
+            hero.update("JERVIS // INSTALLATION CONTROL DECK")
+        else:
+            hero.update(
+                "╭──────────── J  E  R  V  I  S ────────────╮\n"
+                "│        INSTALLATION CONTROL DECK         │\n"
+                "╰──────────────────────────────────────────╯"
+            )
+        self._render_stepbar()
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._apply_responsive_layout(event.size.width, event.size.height)
+
     def on_mount(self) -> None:
         _terminal_cue("boot")
+        self._apply_responsive_layout(self.size.width, self.size.height)
         self.query_one("#auth-button", Button).display = False
         self.query_one("#finish-button", Button).display = False
         self._hide_openclaw_wizard_controls()
@@ -616,12 +771,15 @@ class JervisInstaller(App[int]):
         self.pulse_index = (self.pulse_index + 1) % len(self.pulse_frames)
         pulse.update(self.pulse_frames[self.pulse_index])
 
-        hero = self.hero_frames[(self.animation_tick // 2) % len(self.hero_frames)]
-        hero_widget.update(
-            hero
-            + "\n│        INSTALLATION CONTROL DECK         │"
-            + "\n╰──────────────────────────────────────────╯"
-        )
+        if self.compact_mode:
+            hero_widget.update("JERVIS // INSTALLATION CONTROL DECK")
+        else:
+            hero = self.hero_frames[(self.animation_tick // 2) % len(self.hero_frames)]
+            hero_widget.update(
+                hero
+                + "\n│        INSTALLATION CONTROL DECK         │"
+                + "\n╰──────────────────────────────────────────╯"
+            )
 
         scan = self.scan_frames[self.animation_tick % len(self.scan_frames)]
         if self.transition_ticks > 0:
@@ -704,6 +862,32 @@ class JervisInstaller(App[int]):
             pass
 
     def _render_stepbar(self) -> None:
+        if not self.is_mounted:
+            return
+        if self.tiny_mode:
+            text = (
+                "STEP "
+                + str(self.step + 1)
+                + "/"
+                + str(len(self.STEPS))
+                + " · "
+                + self.STEPS[self.step].upper()
+            )
+            self.query_one("#stepbar", Static).update(text)
+            return
+        if self.compact_mode:
+            self.query_one("#stepbar", Static).update(
+                " · ".join(
+                    (
+                        "[" + str(index + 1) + " " + name.upper() + "]"
+                        if index == self.step
+                        else str(index + 1) + " " + name.upper()
+                    )
+                    for index, name in enumerate(self.STEPS)
+                )
+            )
+            return
+
         parts = []
         for index, name in enumerate(self.STEPS):
             number = str(index + 1).zfill(2)

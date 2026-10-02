@@ -3,18 +3,33 @@ set -eu
 
 REPO="federiconassi15/jervis"
 BASE="https://github.com/$REPO/releases/latest/download"
+LOG="${TMPDIR:-/tmp}/jervis-bootstrap-$$.log"
 
 say() { printf '%s\n' "$*"; }
 die() { say "Jervis installer: $*" >&2; exit 1; }
 
-as_root() {
+cleanup() {
+    rm -rf "${tmp:-}" 2>/dev/null || true
+    rm -f "$LOG" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
+
+as_root_quiet() {
     if [ "$(id -u)" -eq 0 ]; then
-        "$@"
-    elif command -v sudo >/dev/null 2>&1; then
-        sudo "$@"
-    else
-        die "administrator privileges are required to install the download helper"
+        "$@" >"$LOG" 2>&1 || {
+            tail -n 24 "$LOG" >&2 || true
+            return 1
+        }
+        return
     fi
+
+    command -v sudo >/dev/null 2>&1 || die "administrator privileges are required"
+    # Keep authentication visible, then keep the package manager itself quiet.
+    sudo -v
+    sudo -n env DEBIAN_FRONTEND=noninteractive APT_LISTCHANGES_FRONTEND=none         "$@" >"$LOG" 2>&1 || {
+            tail -n 24 "$LOG" >&2 || true
+            return 1
+        }
 }
 
 ensure_downloader() {
@@ -22,18 +37,18 @@ ensure_downloader() {
         return
     fi
 
-    say "Jervis: no downloader found; installing curl using the system package manager..."
+    say "Jervis · preparing download support"
     if command -v pacman >/dev/null 2>&1; then
-        as_root pacman -Sy --needed --noconfirm curl ca-certificates
+        as_root_quiet pacman -Sy --needed --noconfirm curl ca-certificates
     elif command -v apt-get >/dev/null 2>&1; then
-        as_root apt-get update
-        as_root apt-get install -y curl ca-certificates
+        as_root_quiet apt-get -qq update
+        as_root_quiet apt-get -qq install -y curl ca-certificates
     elif command -v dnf >/dev/null 2>&1; then
-        as_root dnf install -y curl ca-certificates
+        as_root_quiet dnf -q -y install curl ca-certificates
     elif command -v zypper >/dev/null 2>&1; then
-        as_root zypper --non-interactive install curl ca-certificates
+        as_root_quiet zypper --non-interactive --quiet install curl ca-certificates
     elif command -v apk >/dev/null 2>&1; then
-        as_root apk add curl ca-certificates
+        as_root_quiet apk add --quiet curl ca-certificates
     else
         die "no curl/wget and no supported package manager were found"
     fi
@@ -43,9 +58,9 @@ fetch() {
     url="$1"
     out="$2"
     if command -v curl >/dev/null 2>&1; then
-        curl -fL --retry 3 --connect-timeout 15 "$url" -o "$out"
+        curl -fsSL --retry 3 --connect-timeout 15 "$url" -o "$out"
     elif command -v wget >/dev/null 2>&1; then
-        wget -O "$out" "$url"
+        wget -q -O "$out" "$url"
     else
         die "no downloader is available"
     fi
@@ -86,11 +101,12 @@ ensure_downloader
 
 tmp="${TMPDIR:-/tmp}/jervis-install-$$"
 mkdir -p "$tmp"
-trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 
-say "Jervis: downloading $asset..."
+say "Jervis · downloading runtime"
 fetch "$BASE/$asset" "$tmp/$asset"
 fetch "$BASE/SHA256SUMS" "$tmp/SHA256SUMS"
+
+say "Jervis · verifying release"
 verify_sha256 "$tmp/$asset" "$tmp/SHA256SUMS" "$asset"
 chmod +x "$tmp/$asset"
 

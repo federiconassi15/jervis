@@ -184,3 +184,32 @@ def test_openclaw_multiselect_renders_arbitrary_options():
             assert app.query_one("#openclaw-wizard-input").value == "2"
 
     asyncio.run(scenario())
+
+
+def test_installer_layout_survives_live_terminal_resize():
+    async def scenario():
+        app = JervisInstaller()
+        async with app.run_test(size=(110, 34)) as pilot:
+            await pilot.pause()
+            assert not app.compact_mode
+            assert not app.tiny_mode
+
+            await pilot.resize_terminal(70, 20)
+            await pilot.pause()
+            assert app.compact_mode
+            assert not app.tiny_mode
+            assert app.query_one("#next").region.bottom <= app.screen.size.height
+
+            await pilot.resize_terminal(42, 14)
+            await pilot.pause()
+            assert app.compact_mode
+            assert app.tiny_mode
+            assert "STEP 1/6" in str(app.query_one("#stepbar").render())
+
+            await pilot.resize_terminal(100, 30)
+            await pilot.pause()
+            assert not app.compact_mode
+            assert not app.tiny_mode
+            assert app.query_one("#next").region.bottom <= app.screen.size.height
+
+    asyncio.run(scenario())
