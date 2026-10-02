@@ -32,6 +32,14 @@ jobs:
           repo = "${{ github.repository }}"
           for source in src.glob("*.md"):
               text = source.read_text(encoding="utf-8")
+
+              # Keep legacy boilerplate from advertising obsolete release
+              # lines in the published Wiki. Feature-specific pages remain
+              # source-controlled and can override these generic labels.
+              text = text.replace("Jervis 7.1", "Jervis 7.3")
+              text = text.replace("7.1.x", "7.3.x")
+              text = text.replace("7.1 reliability line", "7.3 runtime line")
+              text = text.replace("current 7.1 line", "current 7.3 line")
               text = re.sub(
                   r'\]\((?!https?://)([A-Za-z0-9_-]+)\.md\)',
                   lambda m: "](" + m.group(1) + ")",
