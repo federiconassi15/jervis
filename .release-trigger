@@ -1,3 +1,4 @@
 7.3.0
 Validated runtime commit: 959b7b2009a1d80d3bcd3fd704fd7962119cf3bd
+Release assembly fix: 3e936519c0982b452b26a799ce0c2caf29a9b0af
 Purpose: publish the validated Jervis 7.3.0 stable release with native Rust acceleration.
