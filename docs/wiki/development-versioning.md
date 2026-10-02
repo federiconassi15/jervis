@@ -1,54 +1,51 @@
 # Development: Versioning
 
-## Scope
+## Current policy
 
-This page is the Jervis 7.1 reference for **Versioning** within **Development**. Jervis is designed as one cross-platform assistant rather than three loosely related ports, so feature behavior is defined by the shared core and translated to each host only where the operating system genuinely differs.
+Jervis uses semantic-style `major.minor.patch` versions.
 
-## Expected behavior
+The current public line is **7.3.x**:
 
-Versioning should preserve the Jervis reliability contract: local voice, state, and diagnostics remain available even if the OpenClaw brain, network, model provider, or an optional skill is unavailable. Errors should be visible and recoverable rather than silently wedging the runtime.
+- **7.3.0** — public runtime-speed rebuild
+- **7.3.1** — hardening/benchmarking/installer-polish maintenance release in development
+- **7.4.x** — future feature line, intentionally separate from 7.3 maintenance
 
-Trusted conversation sessions are central to 7.1. A user who has already been confidently recognized or authenticated should remain associated with the conversation while activity continues. Speaker confidence can reinforce the session, but an isolated weak sample does not force immediate reauthentication.
+## Automated maintenance rule
 
-## Platform parity
+Automated maintenance may increment **only the patch component** on the current major/minor line after validation.
 
-Linux, Windows, and macOS use the same configuration schema and identity/state model. Host differences are limited to service startup, audio-host APIs, paths, and prerequisite installation. Android AudioSource input is transported by ADB forwarding and feeds the same capture abstraction.
+Examples:
 
-## Server and Desktop
+    7.3.0 -> 7.3.1   allowed
+    7.3.1 -> 7.3.2   allowed
+    7.3.x -> 7.4.0   not automatic
+    7.x   -> 8.0.0   not automatic
 
-Desktop mode is optimized for the user's normal speakers, microphone, login session, and changing peripherals. Server mode is optimized for persistent startup and explicit hardware. Both modes expose the same Jervis commands, identity logic, OpenClaw routing, Control Deck concepts, and update policy.
+Dependency updates must be adapted and tested before pins move. Do not bump the Jervis version just because an upstream package released a newer build.
 
-## Maintenance
+## Version sources
 
-Jervis automated maintenance stays on the current major/minor line. A 7.1.x build may move to a newer 7.1.x patch after validation, but automation must not turn it into 7.2 or 8. External dependency changes should be adapted and tested before pins are updated.
+The runtime/package version must remain aligned between:
 
-## Security and privacy
+- `src/jervis/version.py`
+- `pyproject.toml`
+- release documentation
+- published release/tag
 
-Speaker recognition is not strong biometric authentication. Sensitive actions should require appropriate permission and, when necessary, explicit authentication. Logs and examples must not contain API keys, passphrases, voiceprints, private transcripts, device serials, or personal machine details.
+Installer completion UI must read the active runtime version rather than hard-code an old release string.
 
-## Resource expectations
+## Release documentation
 
-Jervis targets modest always-on hardware as well as modern desktops. Avoid repeated subprocess launches, hot polling, unbounded history, or eagerly loading expensive speech models. The idle path should remain boring and cheap.
+Every release description must be derived from the actual code diff and document:
 
-## Diagnostics
-
-Use this order when investigating Versioning:
-
-1. `jervis doctor`
-2. Control Deck status and timeline
-3. Active Jervis configuration
-4. OS service/startup state
-5. Audio device state when relevant
-6. `openclaw doctor` for brain/provider problems
-7. Sanitized logs and a minimal reproduction
-
-## Contribution expectations
-
-A change touching Versioning should include a focused test where practical, at least one failure-case check, and documentation for any changed user-visible behavior. Cross-platform branches should be explicit and small rather than scattering OS checks across core logic.
+- Added
+- Changed
+- Removed
+- Fixed
+- compatibility notes where relevant
 
 ## Related pages
 
 - [Development index](development-index.md)
-- [Wiki Home](Home.md)
-- [Previous](development-release-workflow.md)
-- [Next](development-platform-adapters.md)
+- [Release Workflow](development-release-workflow.md)
+- [Release Checklist](development-release-checklist.md)
