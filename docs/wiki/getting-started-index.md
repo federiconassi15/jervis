@@ -1,6 +1,6 @@
 # Getting Started
 
-This section contains the Jervis 7.1 wiki pages for **Getting Started**.
+Current documentation for Jervis **7.3** and the **7.3.1 hardening line**.
 
 - [Overview](getting-started-overview.md)
 - [Requirements](getting-started-requirements.md)
@@ -11,7 +11,7 @@ This section contains the Jervis 7.1 wiki pages for **Getting Started**.
 - [Configuration](getting-started-configuration.md)
 - [Audio Selection](getting-started-audio-selection.md)
 - [Android Microphone](getting-started-android-microphone.md)
-- [Openclaw Setup](getting-started-openclaw-setup.md)
+- [OpenClaw Setup](getting-started-openclaw-setup.md)
 - [First User](getting-started-first-user.md)
 - [Voice Training](getting-started-voice-training.md)
 - [Control Deck](getting-started-control-deck.md)
@@ -22,5 +22,7 @@ This section contains the Jervis 7.1 wiki pages for **Getting Started**.
 - [Privacy Basics](getting-started-privacy-basics.md)
 - [Security Basics](getting-started-security-basics.md)
 - [Troubleshooting](getting-started-troubleshooting.md)
+
+For current performance/hardening work, also see [CLI / benchmark](reference-cli.md) and the [Installer](installer-index.md).
 
 [Back to Wiki Home](Home.md)
