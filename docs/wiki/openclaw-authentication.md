@@ -1,57 +1,52 @@
 # OpenClaw: Authentication
 
-Jervis 7.3.1 can configure OpenClaw authentication from inside the Jervis installer.
+## Jervis-owned presentation
 
-## Headless ChatGPT / Codex
+Jervis 7.3.1 renders OpenClaw's own onboarding wizard over Gateway RPC instead of handing the terminal to OpenClaw.
 
-Desktop mode uses browser OAuth.
+The upstream wizard remains authoritative for which authentication methods are available.
 
-Server mode uses OpenClaw's device-code login so a headless host can display the authorization code while approval happens on another device.
+## What this covers
 
-## Provider catalog and future APIs
+Depending on the installed OpenClaw version and provider plugins, the wizard may offer:
 
-Jervis ships a current OpenClaw provider catalog for common API-key, hosted-gateway, custom, and local-model routes.
+- API keys
+- bearer or provider tokens
+- OAuth
+- device-code login
+- CLI credential reuse
+- SecretRef-backed credentials
+- custom OpenAI-compatible endpoints
+- OpenAI Responses-compatible endpoints
+- Anthropic-compatible endpoints
+- local model servers
+- plugin-provided provider authentication
 
-The catalog is not a hard compatibility boundary. The installer also exposes a universal OpenClaw provider mode that accepts a future OpenClaw auth-choice id, credential environment-variable name, and optional official plugin package. This lets a newly released OpenClaw API/provider work before Jervis has a dedicated label for it.
+Jervis does not hard-code that list. It renders what OpenClaw returns.
 
-Official external provider plugins are installed non-interactively only after the user explicitly approves their capability consent in the Jervis installer.
+## Secret handling
 
-Provider credentials are passed through process environment where supported instead of embedding secrets in OpenClaw command-line arguments.
+When OpenClaw marks a text step as sensitive, Jervis renders a password-style input.
 
-## API-key providers
+Jervis does not:
 
-The installer has first-class routes for OpenAI, Anthropic, Gemini, OpenRouter, Mistral, Z.AI, and GitHub Copilot token authentication.
+- place the secret in the review page,
+- echo it in installer status text,
+- write it to Jervis configuration,
+- persist it in Jervis state.
 
-Secrets are entered through masked Jervis fields and are omitted from Jervis review output and dataclass representations.
+The credential is submitted to the local OpenClaw wizard session and OpenClaw applies its own credential-storage policy.
 
-## Custom and local providers
+## Headless authorization
 
-Custom providers can specify:
+Server installs use the same in-Jervis wizard. Authorization URLs, codes, and instructions supplied by OpenClaw are displayed inside the Jervis control deck, so a user can approve access from another browser/device when required.
 
-- base URL
-- model ID
-- optional provider ID
-- OpenAI chat/completions, OpenAI Responses, or Anthropic compatibility
-- text-only or image-capable input
+## Future providers
 
-Ollama and LM Studio can also be configured from the same Brain step.
+A newly added OpenClaw provider does not require a Jervis release merely to appear in setup. If the installed OpenClaw version exposes it through the wizard protocol, Jervis renders it automatically.
 
-## Gateway authentication
+## Related pages
 
-Jervis can ask OpenClaw to:
-
-- generate a Gateway token
-- use a supplied Gateway token
-- use a supplied Gateway password
-
-Gateway bind choices include loopback, auto, LAN, and Tailnet.
-
-## External authorization boundary
-
-OAuth/device-code approval remains an external account-provider action. Jervis keeps the setup state and returns to the Installation Control Deck after authorization.
-
-## Security
-
-Never paste provider secrets into issue reports, logs, screenshots, or committed configuration examples.
-
-[Back to OpenClaw index](openclaw-index.md)
+- [OpenClaw index](openclaw-index.md)
+- [Installer: OpenClaw Setup](installer-openclaw-install.md)
+- [Getting Started: OpenClaw Setup](getting-started-openclaw-setup.md)

@@ -30,8 +30,8 @@ from textual.widgets import (
 from .audio.devices import default_devices, list_devices
 from .install_engine import TOTAL_STEPS, run_install
 from .install_plan import InstallOutcome, InstallPlan
-from .openclaw_providers import provider, select_options
-from .openclaw_setup import configure_interactive_authorization, find_openclaw
+from .openclaw_setup import find_openclaw
+from .openclaw_wizard import OpenClawWizardBridge, WizardResult
 from .prereqs import ensure_linux_audio, find_adb
 from .version import __version__
 
@@ -321,17 +321,15 @@ class JervisInstaller(App[int]):
         self.inputs, self.outputs, self.androids = self._detect_audio()
         self.select_values = {
             "mode": ["desktop", "server"],
-            "openclaw-auth": [value for _label, value in select_options()],
-            "openclaw-gateway-bind": ["loopback", "auto", "lan", "tailnet"],
-            "openclaw-gateway-auth": ["generated-token", "token", "password"],
-            "openclaw-daemon-runtime": ["node", "bun"],
-            "openclaw-node-manager": ["npm", "pnpm", "bun"],
-            "openclaw-custom-compat": ["openai", "openai-responses", "anthropic"],
+            "openclaw-setup": ["wizard", "later"],
             "microphone": [value for _label, value in self.inputs],
             "output": [value for _label, value in self.outputs],
             "honorific": ["sir", "maam"],
         }
         self.openclaw = find_openclaw()
+        self.openclaw_wizard: OpenClawWizardBridge | None = None
+        self.openclaw_wizard_step: dict | None = None
+        self.openclaw_wizard_option_values: list[object] = []
 
     def _detect_audio(self):
         inputs = []
@@ -427,151 +425,40 @@ class JervisInstaller(App[int]):
                 with VerticalScroll(classes="page", id="page-brain"):
                     yield Static("┌─ 02 // OPENCLAW BRAIN ─────────────────────┐", classes="title")
                     yield Static(
-                        "Jervis owns the setup flow. OpenClaw runs behind this screen.",
+                        "Jervis renders OpenClaw's own live setup wizard. "
+                        "Providers, API keys, plugins, channels, search, skills, "
+                        "Gateway and daemon prompts stay inside Jervis.",
                         classes="hint",
                     )
                     yield Static(
                         (
                             "● OpenClaw detected: " + str(self.openclaw)
                             if self.openclaw
-                            else "○ OpenClaw is not installed yet"
+                            else "○ OpenClaw will be installed quietly during setup"
                         ),
                         classes="card",
                         id="openclaw-status",
                     )
-                    yield Label("AI provider / authentication")
-                    yield Select(
-                        select_options(),
-                        value="openai",
-                        allow_blank=False,
-                        id="openclaw-auth",
-                    )
-                    yield Input(
-                        placeholder="Provider API key / token",
-                        password=True,
-                        id="openclaw-provider-key",
-                    )
-                    yield Input(
-                        value="main",
-                        placeholder="OpenClaw agent name",
-                        id="openclaw-agent-name",
-                    )
-
-                    yield Static(
-                        "UNIVERSAL OPENCLAW PROVIDER",
-                        classes="hint",
-                        id="openclaw-universal-title",
-                    )
-                    yield Input(
-                        placeholder="OpenClaw auth-choice id · e.g. future-provider-api-key",
-                        id="openclaw-universal-auth-choice",
-                    )
-                    yield Input(
-                        placeholder="Credential env var · e.g. FUTURE_PROVIDER_API_KEY",
-                        id="openclaw-universal-env",
-                    )
-                    yield Input(
-                        placeholder="Official plugin package · optional",
-                        id="openclaw-universal-plugin",
-                    )
-
-                    yield Static("CUSTOM / LOCAL PROVIDER", classes="hint", id="openclaw-custom-title")
-                    yield Input(
-                        placeholder="Base URL · e.g. https://llm.example.com/v1",
-                        id="openclaw-custom-base-url",
-                    )
-                    yield Input(
-                        placeholder="Model ID · e.g. foo-large",
-                        id="openclaw-custom-model-id",
-                    )
-                    yield Input(
-                        placeholder="Provider ID · optional",
-                        id="openclaw-custom-provider-id",
-                    )
                     yield Select(
                         [
-                            ("OpenAI chat/completions compatible", "openai"),
-                            ("OpenAI Responses compatible", "openai-responses"),
-                            ("Anthropic compatible", "anthropic"),
+                            (
+                                "Full OpenClaw guided setup · all current/future providers",
+                                "wizard",
+                            ),
+                            ("Configure OpenClaw later", "later"),
                         ],
-                        value="openai",
+                        value="wizard",
                         allow_blank=False,
-                        id="openclaw-custom-compat",
-                    )
-                    with Horizontal(classes="card", id="openclaw-custom-image-row"):
-                        yield Label("Model accepts image input")
-                        yield Switch(value=False, id="openclaw-custom-image")
-
-                    yield Static("GATEWAY", classes="hint")
-                    yield Select(
-                        [
-                            ("Loopback only · safest default", "loopback"),
-                            ("Auto · container aware", "auto"),
-                            ("LAN · private network exposure", "lan"),
-                            ("Tailnet · Tailscale IP", "tailnet"),
-                        ],
-                        value="loopback",
-                        allow_blank=False,
-                        id="openclaw-gateway-bind",
-                    )
-                    yield Select(
-                        [
-                            ("Generate a Gateway token automatically", "generated-token"),
-                            ("Use my Gateway token", "token"),
-                            ("Use a Gateway password", "password"),
-                        ],
-                        value="generated-token",
-                        allow_blank=False,
-                        id="openclaw-gateway-auth",
-                    )
-                    yield Input(
-                        placeholder="Gateway token / password",
-                        password=True,
-                        id="openclaw-gateway-secret",
-                    )
-
-                    yield Static("RUNTIME + OPTIONAL SETUP", classes="hint")
-                    yield Select(
-                        [("Node · recommended", "node"), ("Bun", "bun")],
-                        value="node",
-                        allow_blank=False,
-                        id="openclaw-daemon-runtime",
-                    )
-                    yield Select(
-                        [("npm", "npm"), ("pnpm", "pnpm"), ("bun", "bun")],
-                        value="npm",
-                        allow_blank=False,
-                        id="openclaw-node-manager",
+                        id="openclaw-setup",
                     )
                     with Horizontal(classes="card"):
                         yield Label("Install OpenClaw automatically if missing")
                         yield Switch(value=True, id="openclaw-install")
-                    with Horizontal(classes="card"):
-                        yield Label("Install OpenClaw Gateway daemon")
-                        yield Switch(value=True, id="openclaw-daemon")
-                    with Horizontal(classes="card"):
-                        yield Label("Set up skills")
-                        yield Switch(value=True, id="openclaw-skills")
-                    with Horizontal(classes="card"):
-                        yield Label("Set up hooks")
-                        yield Switch(value=True, id="openclaw-hooks")
-                    with Horizontal(classes="card"):
-                        yield Label("Set up channels")
-                        yield Switch(value=False, id="openclaw-channels")
-                    with Horizontal(classes="card"):
-                        yield Label("Set up web search")
-                        yield Switch(value=True, id="openclaw-search")
-
-                    with Horizontal(classes="card", id="openclaw-plugin-consent-row"):
-                        yield Label(
-                            "Allow required official provider plugin capabilities"
-                        )
-                        yield Switch(value=False, id="openclaw-plugin-capabilities")
-                    with Horizontal(classes="card"):
-                        yield Label(
-                            "I understand OpenClaw agents can use tools and system access"
-                        )
-                        yield Switch(value=False, id="openclaw-risk")
+                    yield Static(
+                        "No provider list is hard-coded in Jervis. The installed "
+                        "OpenClaw version supplies every setup question at runtime.",
+                        classes="hint",
+                    )
 
                 with VerticalScroll(classes="page", id="page-audio"):
                     yield Static("┌─ 03 // AUDIO MATRIX ───────────────────────┐", classes="title")
@@ -644,8 +531,31 @@ class JervisInstaller(App[int]):
                     yield Static("", id="progress-detail")
                     yield ProgressBar(total=TOTAL_STEPS, show_eta=False, id="progress")
                     yield Static("", id="error-mark")
+
+                    yield Static("", id="openclaw-wizard-title", classes="title", markup=False)
+                    yield Static("", id="openclaw-wizard-message", classes="card", markup=False)
+                    yield Static("", id="openclaw-wizard-options", classes="hint", markup=False)
+                    yield Select(
+                        [("Waiting for OpenClaw…", "0")],
+                        allow_blank=True,
+                        id="openclaw-wizard-select",
+                    )
+                    yield Input(id="openclaw-wizard-input")
+                    with Horizontal(classes="card", id="openclaw-wizard-confirm-row"):
+                        yield Label("Confirm")
+                        yield Switch(value=False, id="openclaw-wizard-confirm")
+                    yield Button(
+                        "Continue",
+                        id="openclaw-wizard-next",
+                        variant="primary",
+                    )
+
                     yield Static("", id="done-mark")
-                    yield Button("Continue to OpenClaw sign-in", id="auth-button", variant="primary")
+                    yield Button(
+                        "Retry OpenClaw setup",
+                        id="auth-button",
+                        variant="primary",
+                    )
                     yield Button("Finish", id="finish-button", variant="primary")
 
             with Horizontal(id="nav"):
@@ -657,11 +567,40 @@ class JervisInstaller(App[int]):
         _terminal_cue("boot")
         self.query_one("#auth-button", Button).display = False
         self.query_one("#finish-button", Button).display = False
+        self._hide_openclaw_wizard_controls()
         self.set_interval(0.12, self._pulse_tick)
         self._render_stepbar()
-        self._refresh_openclaw_fields()
         self._refresh_context()
         self.query_one("#mode", Select).focus()
+
+    def _hide_openclaw_wizard_controls(self) -> None:
+        for selector in (
+            "#openclaw-wizard-title",
+            "#openclaw-wizard-message",
+            "#openclaw-wizard-options",
+            "#openclaw-wizard-select",
+            "#openclaw-wizard-input",
+            "#openclaw-wizard-confirm-row",
+            "#openclaw-wizard-next",
+        ):
+            try:
+                self.query_one(selector).display = False
+            except NoMatches:
+                pass
+
+    def _show_openclaw_wizard_shell(self) -> None:
+        self.query_one("#openclaw-wizard-title").display = True
+        self.query_one("#openclaw-wizard-message").display = True
+
+    def _close_openclaw_wizard(self) -> None:
+        bridge = self.openclaw_wizard
+        self.openclaw_wizard = None
+        self.openclaw_wizard_step = None
+        if bridge is not None:
+            try:
+                bridge.close()
+            except Exception:
+                pass
 
     def _pulse_tick(self) -> None:
         # Textual may deliver one final timer tick while the test/app screen is
@@ -720,48 +659,6 @@ class JervisInstaller(App[int]):
             + "  ·  bundled runtime"
         )
 
-    def _refresh_openclaw_fields(self) -> None:
-        if not self.is_mounted:
-            return
-        try:
-            auth = str(self.query_one("#openclaw-auth", Select).value)
-            spec = provider(auth)
-            is_custom = auth == "custom-api-key"
-            is_universal = auth == "universal-provider"
-            is_local = bool(spec and spec.local)
-            needs_base = is_custom or is_universal or bool(
-                spec and (spec.local or spec.requires_base_url)
-            )
-            needs_key = is_custom or is_universal or bool(
-                spec and spec.credential_env
-            )
-
-            self.query_one("#openclaw-provider-key", Input).display = needs_key
-            self.query_one("#openclaw-universal-title", Static).display = is_universal
-            self.query_one("#openclaw-universal-auth-choice", Input).display = is_universal
-            self.query_one("#openclaw-universal-env", Input).display = is_universal
-            self.query_one("#openclaw-universal-plugin", Input).display = is_universal
-
-            self.query_one("#openclaw-custom-title", Static).display = needs_base
-            self.query_one("#openclaw-custom-base-url", Input).display = needs_base
-            self.query_one("#openclaw-custom-model-id", Input).display = (
-                is_custom or is_universal or is_local
-            )
-            self.query_one("#openclaw-custom-provider-id", Input).display = is_custom
-            self.query_one("#openclaw-custom-compat", Select).display = is_custom
-            self.query_one("#openclaw-custom-image-row", Horizontal).display = is_custom
-
-            plugin = spec.plugin if spec and spec.plugin else ""
-            if is_universal:
-                plugin = self.query_one(
-                    "#openclaw-universal-plugin", Input
-                ).value.strip()
-            self.query_one(
-                "#openclaw-plugin-consent-row", Horizontal
-            ).display = bool(plugin)
-        except NoMatches:
-            return
-
     def _refresh_context(self) -> None:
         if not self.is_mounted:
             return
@@ -774,21 +671,12 @@ class JervisInstaller(App[int]):
                 else "Server  ·  persistent startup  ·  always-on hardware"
             )
         elif self.step == 1:
-            auth = str(self.query_one("#openclaw-auth", Select).value)
-            spec = provider(auth)
-            if spec:
-                suffix = (
-                    " · external authorization"
-                    if spec.interactive
-                    else " · hidden onboarding"
-                )
-                text = "Brain  ·  " + spec.label + suffix
-            elif auth == "custom-api-key":
-                text = "Brain  ·  custom compatible API · hidden onboarding"
-            elif auth == "universal-provider":
-                text = "Brain  ·  universal OpenClaw provider pass-through"
-            else:
-                text = "Brain  ·  setup deferred · local Jervis remains usable"
+            setup = str(self.query_one("#openclaw-setup", Select).value)
+            text = (
+                "Brain  ·  OpenClaw upstream wizard · all providers/APIs"
+                if setup == "wizard"
+                else "Brain  ·  OpenClaw setup deferred"
+            )
         elif self.step == 2:
             mic = self.query_one("#microphone", Select).value
             out = self.query_one("#output", Select).value
@@ -844,7 +732,7 @@ class JervisInstaller(App[int]):
         self._refresh_context()
         focus_targets = {
             0: "#mode",
-            1: "#openclaw-auth",
+            1: "#openclaw-setup",
             2: "#microphone",
             3: "#owner-name",
         }
@@ -862,78 +750,12 @@ class JervisInstaller(App[int]):
                 if self.plan.mode == "server":
                     self.query_one("#autostart", Switch).value = True
             elif self.step == 1:
-                self.plan.openclaw_auth = str(
-                    self.query_one("#openclaw-auth", Select).value
+                self.plan.openclaw_setup = str(
+                    self.query_one("#openclaw-setup", Select).value
                 )
                 self.plan.install_openclaw = bool(
                     self.query_one("#openclaw-install", Switch).value
                 )
-                self.plan.openclaw_accept_risk = bool(
-                    self.query_one("#openclaw-risk", Switch).value
-                )
-                self.plan.openclaw_accept_plugin_capabilities = bool(
-                    self.query_one("#openclaw-plugin-capabilities", Switch).value
-                )
-                self.plan.openclaw_agent_name = self.query_one(
-                    "#openclaw-agent-name", Input
-                ).value.strip()
-                self.plan.openclaw_api_key = self.query_one(
-                    "#openclaw-provider-key", Input
-                ).value
-                self.plan.openclaw_gateway_bind = str(
-                    self.query_one("#openclaw-gateway-bind", Select).value
-                )
-                self.plan.openclaw_gateway_auth = str(
-                    self.query_one("#openclaw-gateway-auth", Select).value
-                )
-                self.plan.openclaw_gateway_secret = self.query_one(
-                    "#openclaw-gateway-secret", Input
-                ).value
-                self.plan.openclaw_daemon_runtime = str(
-                    self.query_one("#openclaw-daemon-runtime", Select).value
-                )
-                self.plan.openclaw_node_manager = str(
-                    self.query_one("#openclaw-node-manager", Select).value
-                )
-                self.plan.openclaw_install_daemon = bool(
-                    self.query_one("#openclaw-daemon", Switch).value
-                )
-                self.plan.openclaw_setup_skills = bool(
-                    self.query_one("#openclaw-skills", Switch).value
-                )
-                self.plan.openclaw_setup_hooks = bool(
-                    self.query_one("#openclaw-hooks", Switch).value
-                )
-                self.plan.openclaw_setup_channels = bool(
-                    self.query_one("#openclaw-channels", Switch).value
-                )
-                self.plan.openclaw_setup_search = bool(
-                    self.query_one("#openclaw-search", Switch).value
-                )
-                self.plan.openclaw_custom_base_url = self.query_one(
-                    "#openclaw-custom-base-url", Input
-                ).value.strip()
-                self.plan.openclaw_custom_model_id = self.query_one(
-                    "#openclaw-custom-model-id", Input
-                ).value.strip()
-                self.plan.openclaw_custom_provider_id = self.query_one(
-                    "#openclaw-custom-provider-id", Input
-                ).value.strip()
-                self.plan.openclaw_custom_compatibility = str(
-                    self.query_one("#openclaw-custom-compat", Select).value
-                )
-                self.plan.openclaw_custom_image_input = bool(
-                    self.query_one("#openclaw-custom-image", Switch).value
-                )
-                self.plan.openclaw_universal_auth_choice = self.query_one(
-                    "#openclaw-universal-auth-choice", Input
-                ).value.strip()
-                self.plan.openclaw_universal_credential_env = self.query_one(
-                    "#openclaw-universal-env", Input
-                ).value.strip()
-                self.plan.openclaw_universal_plugin = self.query_one(
-                    "#openclaw-universal-plugin", Input
-                ).value.strip()
                 self.plan.validate_openclaw()
             elif self.step == 2:
                 mic_value = self.query_one("#microphone", Select).value
@@ -981,28 +803,14 @@ class JervisInstaller(App[int]):
             if self.plan.source_kind == "android"
             else "Computer microphone #" + str(self.plan.input_device)
         )
-        spec = provider(self.plan.openclaw_auth)
-        if spec:
-            brain = spec.label
-        elif self.plan.openclaw_auth == "custom-api-key":
-            brain = "Custom compatible provider"
-        elif self.plan.openclaw_auth == "universal-provider":
-            brain = (
-                "OpenClaw pass-through · "
-                + self.plan.openclaw_universal_auth_choice
-            )
-        else:
-            brain = "Configure later"
+        brain = (
+            "Full OpenClaw wizard · providers/APIs supplied live by OpenClaw"
+            if self.plan.openclaw_setup == "wizard"
+            else "Configure OpenClaw later"
+        )
         lines = [
             "✓  [b]Mode[/b]          " + self.plan.mode.title(),
             "✓  [b]Brain[/b]         " + brain,
-            "✓  [b]OpenClaw agent[/b] " + self.plan.openclaw_agent_name,
-            "✓  [b]Gateway[/b]       "
-            + self.plan.openclaw_gateway_bind
-            + " · "
-            + self.plan.openclaw_gateway_auth,
-            "✓  [b]Provider secret[/b] "
-            + ("configured (hidden)" if self.plan.openclaw_api_key else "not required / external auth"),
             "✓  [b]Microphone[/b]    " + microphone,
             "✓  [b]Output[/b]        Device #" + str(self.plan.output_device),
             "✓  [b]Startup[/b]       " + ("Automatic" if self.plan.start_at_boot else "Manual"),
@@ -1014,8 +822,7 @@ class JervisInstaller(App[int]):
 
     @on(Select.Changed)
     def selection_changed(self, event: Select.Changed) -> None:
-        if event.select.id == "openclaw-auth":
-            self._refresh_openclaw_fields()
+        del event
         self._refresh_context()
 
     @on(Switch.Changed)
@@ -1025,12 +832,7 @@ class JervisInstaller(App[int]):
 
     @on(Input.Changed)
     def input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "openclaw-universal-plugin":
-            self._refresh_openclaw_fields()
-        if event.input.id in {
-            "owner-name",
-            "openclaw-universal-auth-choice",
-        }:
+        if event.input.id == "owner-name":
             self._refresh_context()
 
     @on(Button.Pressed, "#next")
@@ -1149,40 +951,291 @@ class JervisInstaller(App[int]):
             "MIC LEVEL  " + meter + "  " + label + "  ·  RMS " + format(level, ".4f")
         )
 
-    @on(Button.Pressed, "#auth-button")
-    def auth_button_pressed(self) -> None:
-        if not self.outcome or not self.outcome.openclaw_cli:
-            self._show_done()
+    def _render_openclaw_wizard_step(self, step: dict) -> None:
+        self.openclaw_wizard_step = step
+        self._hide_openclaw_wizard_controls()
+        self._show_openclaw_wizard_shell()
+
+        step_type = str(step.get("type", "note"))
+        title = str(step.get("title") or "OPENCLAW GUIDED SETUP")
+        message = str(step.get("message") or "")
+        self.query_one("#openclaw-wizard-title", Static).update(
+            "┌─ OPENCLAW // " + title.upper() + " ─┐"
+        )
+        self.query_one("#openclaw-wizard-message", Static).update(message)
+        self.query_one("#progress-status", Static).update(
+            "OpenClaw setup · " + step_type
+        )
+
+        next_button = self.query_one("#openclaw-wizard-next", Button)
+        options_text = self.query_one("#openclaw-wizard-options", Static)
+        options_text.update("")
+        self.openclaw_wizard_option_values = []
+        self.select_values.pop("openclaw-wizard-select", None)
+
+        if step_type == "text":
+            field = self.query_one("#openclaw-wizard-input", Input)
+            field.display = True
+            field.password = bool(step.get("sensitive", False))
+            initial = step.get("initialValue")
+            field.value = "" if initial is None else str(initial)
+            field.placeholder = str(step.get("placeholder") or "")
+            next_button.label = "Submit"
+            next_button.display = True
+            field.focus()
+            return
+
+        if step_type == "select":
+            raw_options = step.get("options")
+            options = raw_options if isinstance(raw_options, list) else []
+            labels: list[tuple[str, str]] = []
+            values: list[object] = []
+            initial_index = 0
+            initial = step.get("initialValue")
+            for index, option in enumerate(options):
+                if not isinstance(option, dict):
+                    continue
+                value = option.get("value")
+                label = str(option.get("label") or value or ("Option " + str(index + 1)))
+                hint = str(option.get("hint") or "").strip()
+                if hint:
+                    label += " · " + hint
+                token = str(len(values))
+                labels.append((label, token))
+                values.append(value)
+                if value == initial:
+                    initial_index = len(values) - 1
+
+            if not labels:
+                labels = [("No options returned by OpenClaw", "0")]
+                values = [None]
+
+            control = self.query_one("#openclaw-wizard-select", Select)
+            control.set_options(labels)
+            control.value = str(min(initial_index, len(values) - 1))
+            control.display = True
+            self.openclaw_wizard_option_values = values
+            self.select_values["openclaw-wizard-select"] = [
+                str(i) for i in range(len(values))
+            ]
+            next_button.label = "Select"
+            next_button.display = True
+            control.focus()
+            return
+
+        if step_type == "confirm":
+            control = self.query_one("#openclaw-wizard-confirm", Switch)
+            control.value = bool(step.get("initialValue", False))
+            self.query_one("#openclaw-wizard-confirm-row").display = True
+            next_button.label = "Confirm"
+            next_button.display = True
+            control.focus()
+            return
+
+        if step_type == "multiselect":
+            raw_options = step.get("options")
+            options = raw_options if isinstance(raw_options, list) else []
+            values: list[object] = []
+            lines: list[str] = []
+            initial_values = step.get("initialValue")
+            selected = initial_values if isinstance(initial_values, list) else []
+            selected_numbers: list[str] = []
+            for index, option in enumerate(options, start=1):
+                if not isinstance(option, dict):
+                    continue
+                value = option.get("value")
+                values.append(value)
+                label = str(option.get("label") or value or ("Option " + str(index)))
+                hint = str(option.get("hint") or "").strip()
+                lines.append(
+                    str(index) + ". " + label + ((" · " + hint) if hint else "")
+                )
+                if value in selected:
+                    selected_numbers.append(str(index))
+
+            self.openclaw_wizard_option_values = values
+            options_text.update("\n".join(lines))
+            options_text.display = True
+            field = self.query_one("#openclaw-wizard-input", Input)
+            field.password = False
+            field.placeholder = "Comma-separated choices · e.g. 1,3,5"
+            field.value = ",".join(selected_numbers)
+            field.display = True
+            next_button.label = "Apply selections"
+            next_button.display = True
+            field.focus()
+            return
+
+        if step_type == "progress":
+            self.query_one("#progress-detail", Static).update(
+                message or "OpenClaw is working…"
+            )
+            self.set_timer(0.05, self._poll_openclaw_wizard)
+            return
+
+        # note and action steps stay fully inside Jervis. OAuth/device-code
+        # URLs/codes delivered by OpenClaw appear in the message above.
+        next_button.label = "Continue"
+        next_button.display = True
+        next_button.focus()
+
+    def _openclaw_wizard_result(self, result: WizardResult) -> None:
+        if result.done:
+            if result.status == "done":
+                if self.outcome is not None:
+                    self.outcome.openclaw_configured = True
+                    self.outcome.openclaw_needs_wizard = False
+                self._close_openclaw_wizard()
+                self._hide_openclaw_wizard_controls()
+                self.query_one("#progress-detail", Static).update(
+                    "OpenClaw setup completed through the Jervis control deck."
+                )
+                self._show_done()
+                return
+            self._openclaw_wizard_failed(
+                result.error or ("OpenClaw wizard ended with status " + result.status)
+            )
+            return
+
+        if result.step is None:
+            self._openclaw_wizard_failed(
+                "OpenClaw returned no setup step and did not report completion."
+            )
+            return
+        self._render_openclaw_wizard_step(result.step)
+
+    def _openclaw_wizard_failed(self, message: str) -> None:
+        _terminal_cue("attention")
+        self._close_openclaw_wizard()
+        self._hide_openclaw_wizard_controls()
+        self.query_one("#error-mark", Static).update(
+            "╭─ ! OPENCLAW SETUP NEEDS ATTENTION ─╮\n"
+            + message[-3000:]
+            + "\n╰─ Jervis core remains installed ────╯"
+        )
+        self.query_one("#progress-status", Static).update(
+            "OpenClaw guided setup did not finish."
+        )
+        self.query_one("#progress-detail", Static).update(
+            "Earlier OpenClaw answers may already be saved. Retry the upstream "
+            "wizard, or finish and configure it later."
+        )
+        self.query_one("#auth-button", Button).display = True
+        self.query_one("#finish-button", Button).display = True
+
+    @work(thread=True, exclusive=True, group="openclaw-wizard-start")
+    def _begin_openclaw_wizard_worker(self) -> None:
+        outcome = self.outcome
+        if not outcome or not outcome.openclaw_cli:
+            self.call_from_thread(
+                self._openclaw_wizard_failed,
+                "OpenClaw CLI is unavailable.",
+            )
+            return
+
+        bridge = OpenClawWizardBridge(Path(outcome.openclaw_cli))
+        try:
+            result = bridge.start()
+        except Exception as exc:
+            try:
+                bridge.close()
+            except Exception:
+                pass
+            self.call_from_thread(self._openclaw_wizard_failed, str(exc))
+            return
+
+        self.openclaw_wizard = bridge
+        self.call_from_thread(self._openclaw_wizard_result, result)
+
+    def _begin_openclaw_wizard(self) -> None:
+        self.query_one("#auth-button", Button).display = False
+        self.query_one("#finish-button", Button).display = False
+        self.query_one("#error-mark", Static).update("")
+        self.query_one("#progress-status", Static).update(
+            "Starting OpenClaw guided setup inside Jervis…"
+        )
+        self.query_one("#progress-detail", Static).update(
+            "Loading the live upstream provider/API/channel/skills wizard."
+        )
+        self._begin_openclaw_wizard_worker()
+
+    @work(thread=True, exclusive=True, group="openclaw-wizard-next")
+    def _advance_openclaw_wizard_worker(
+        self,
+        step_id: str | None,
+        value,
+    ) -> None:
+        bridge = self.openclaw_wizard
+        if bridge is None:
+            self.call_from_thread(
+                self._openclaw_wizard_failed,
+                "OpenClaw wizard connection is not active.",
+            )
             return
         try:
-            self.notify(
-                "Jervis is temporarily handing the terminal to OpenClaw for the sign-in step.",
-                title="OpenClaw",
-            )
-            with self.suspend():
-                configure_interactive_authorization(
-                    Path(self.outcome.openclaw_cli),
-                    self.plan,
-                )
+            result = bridge.next(step_id, value)
         except Exception as exc:
-            _terminal_cue("attention")
-            self.query_one("#error-mark", Static).update(
-                "╭─ ! OPENCLAW ATTENTION REQUIRED ─╮\n"
-                + str(exc)
-                + "\n╰─ Jervis core remains installed ─╯"
-            )
-            self.query_one("#progress-status", Static).update(
-                "Jervis is installed. OpenClaw sign-in can be retried later."
-            )
-            self.query_one("#progress-detail", Static).update(
-                "Retry here, or finish now and configure OpenClaw from its CLI later."
-            )
-            self.query_one("#finish-button", Button).display = True
+            self.call_from_thread(self._openclaw_wizard_failed, str(exc))
             return
-        self._show_done()
+        self.call_from_thread(self._openclaw_wizard_result, result)
+
+    def _poll_openclaw_wizard(self) -> None:
+        self._advance_openclaw_wizard_worker(None, None)
+
+    @on(Button.Pressed, "#openclaw-wizard-next")
+    def openclaw_wizard_next_pressed(self) -> None:
+        step = self.openclaw_wizard_step
+        if not step:
+            return
+
+        step_id = str(step.get("id") or "")
+        step_type = str(step.get("type") or "note")
+        value = None
+
+        try:
+            if step_type == "text":
+                value = self.query_one("#openclaw-wizard-input", Input).value
+            elif step_type == "select":
+                token = self.query_one("#openclaw-wizard-select", Select).value
+                if token is Select.NULL:
+                    raise ValueError("Choose an OpenClaw option.")
+                index = int(str(token))
+                value = self.openclaw_wizard_option_values[index]
+            elif step_type == "confirm":
+                value = bool(
+                    self.query_one("#openclaw-wizard-confirm", Switch).value
+                )
+            elif step_type == "multiselect":
+                raw = self.query_one("#openclaw-wizard-input", Input).value.strip()
+                indexes: list[int] = []
+                if raw:
+                    for item in raw.split(","):
+                        number = int(item.strip())
+                        index = number - 1
+                        if index < 0 or index >= len(self.openclaw_wizard_option_values):
+                            raise ValueError(
+                                "Multiselect choices must use the numbers shown above."
+                            )
+                        if index not in indexes:
+                            indexes.append(index)
+                value = [self.openclaw_wizard_option_values[index] for index in indexes]
+            elif step_type == "action":
+                value = step.get("initialValue", True)
+        except Exception as exc:
+            self.notify(str(exc), title="OpenClaw setup", severity="warning")
+            return
+
+        self.query_one("#openclaw-wizard-next", Button).display = False
+        self._advance_openclaw_wizard_worker(step_id, value)
+
+    @on(Button.Pressed, "#auth-button")
+    def auth_button_pressed(self) -> None:
+        self._close_openclaw_wizard()
+        self._begin_openclaw_wizard()
 
     @on(Button.Pressed, "#finish-button")
     def finish_pressed(self) -> None:
+        self._close_openclaw_wizard()
         self.exit(0)
 
     def _cycle_focused_select(self, direction: int) -> bool:
@@ -1226,6 +1279,7 @@ class JervisInstaller(App[int]):
             self.next_page()
 
     def action_quit(self) -> None:
+        self._close_openclaw_wizard()
         self.exit(0 if self.core_installed else 130)
 
     def action_previous_control(self) -> None:
@@ -1331,25 +1385,30 @@ class JervisInstaller(App[int]):
             self.query_one("#progress-detail", Static).update(
                 "\n".join("• " + item for item in outcome.warnings)
             )
-        needs_auth = bool(outcome.openclaw_cli and outcome.openclaw_needs_auth)
-        if needs_auth:
-            _terminal_cue("attention")
-            self.query_one("#progress-status", Static).update(
-                "Jervis is installed. External account authorization remains."
-            )
-            self.query_one("#auth-button", Button).display = True
+
+        if outcome.openclaw_cli and outcome.openclaw_needs_wizard:
+            self._begin_openclaw_wizard()
         else:
             self._show_done()
 
     def _show_done(self) -> None:
+        self._close_openclaw_wizard()
+        self._hide_openclaw_wizard_controls()
         _terminal_cue("complete")
         self.query_one("#auth-button", Button).display = False
         self.query_one("#progress-status", Static).update(
             "╰─ INSTALLATION COMPLETE // SYSTEMS NOMINAL ─╯"
         )
+        openclaw_state = (
+            "OPENCLAW ONLINE"
+            if self.outcome is not None and self.outcome.openclaw_configured
+            else "OPENCLAW DEFERRED"
+        )
         self.query_one("#done-mark", Static).update(
             "╭──────────── ✓ JERVIS " + __version__ + " READY ────────────╮\n"
-            "│      VOICE · IDENTITY · MEMORY · OPENCLAW ONLINE      │\n"
+            "│      VOICE · IDENTITY · MEMORY · "
+            + openclaw_state
+            + "      │\n"
             "╰──────────────────────────────────────────────────────╯"
         )
         self.query_one("#finish-button", Button).display = True

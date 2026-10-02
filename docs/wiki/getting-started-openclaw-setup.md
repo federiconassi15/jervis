@@ -1,35 +1,36 @@
 # Getting Started: OpenClaw Setup
 
-OpenClaw setup is integrated into the Jervis installer.
+During Jervis installation, choose:
 
-## Brain step
+- **Full OpenClaw guided setup** — recommended
+- **Configure OpenClaw later**
 
-Choose your provider, enter any required credential, configure the Gateway, and choose daemon/runtime options without leaving the Jervis Installation Control Deck.
+## Full guided setup
 
-For API-key, token, custom-provider, Ollama, and LM Studio routes, Jervis runs OpenClaw onboarding non-interactively behind the scenes.
+You stay inside the Jervis Installation Control Deck.
 
-For ChatGPT/Codex or xAI OAuth, Jervis completes every local configuration choice first and then asks for the unavoidable external account authorization.
+After the Jervis core is installed, Jervis loads OpenClaw's live onboarding wizard and displays its questions directly. This includes provider/API selection, authentication, model selection, custom endpoints, Gateway setup, channels, search, skills, daemon/service setup, and any provider-plugin prompts exposed by the installed OpenClaw version.
+
+You should not see the raw OpenClaw terminal wizard.
+
+## API/provider support
+
+Jervis does not ship a frozen provider list.
+
+The installed OpenClaw version decides what providers and API/auth methods exist. As OpenClaw or its provider plugins add new options, they appear in the Jervis installer automatically through the wizard protocol.
 
 ## Headless servers
 
-For a Server install using ChatGPT/Codex, Jervis selects device-code authentication. You can approve the code in a browser on another computer or phone while the server remains headless.
+Browser and device-code authorization instructions are shown in Jervis. Complete the requested authorization from another device and continue the Jervis setup.
 
-## Any OpenClaw provider
+## If setup fails
 
-The provider picker contains a large built-in catalog. If the provider you need is newer than the installed Jervis catalog, choose **Any OpenClaw provider · advanced pass-through**.
+Jervis remains installed. Choose **Retry OpenClaw setup** to start the upstream wizard again, or finish and configure OpenClaw later.
 
-Enter the auth-choice id documented by OpenClaw and, if needed, the provider's credential environment-variable name and official plugin package. Jervis keeps the flow non-interactive and behind the Installation Control Deck.
+Earlier OpenClaw wizard answers may already have been saved before a failure.
 
-## Provider secrets
+## Related pages
 
-Secrets are masked while typing and are not shown on the review screen.
-
-## Risk acknowledgement
-
-OpenClaw agents can use tools and system access. Jervis requires the user to explicitly acknowledge that warning before setup can continue.
-
-## Troubleshooting
-
-If hidden onboarding fails, Jervis reports the OpenClaw error while preserving the Jervis installation boundary. Run `openclaw doctor` for provider/Gateway diagnostics after installation.
-
-[Back to Getting Started](getting-started-index.md)
+- [Getting Started index](getting-started-index.md)
+- [OpenClaw Authentication](openclaw-authentication.md)
+- [Installer: OpenClaw Setup](installer-openclaw-install.md)

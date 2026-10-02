@@ -14,7 +14,6 @@ def test_install_plan_validation():
         owner_name="Example",
         honorific="sir",
         passphrase="correct horse battery staple",
-        openclaw_accept_risk=True,
     )
     plan.validate()
 
@@ -35,7 +34,7 @@ def test_installer_tui_mounts_and_mouse_navigates():
             assert clicked
             await pilot.pause()
             assert app.step == 1
-            assert app.query_one("#openclaw-auth") is not None
+            assert app.query_one("#openclaw-setup") is not None
 
     asyncio.run(scenario())
 
@@ -112,3 +111,76 @@ def test_installer_arrow_navigation():
 def test_terminal_cues_can_be_disabled(monkeypatch):
     monkeypatch.setenv("JERVIS_TERMINAL_CUES", "0")
     _terminal_cue("attention")
+
+
+def test_openclaw_sensitive_text_step_is_masked():
+    async def scenario():
+        app = JervisInstaller()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app._switch(5)
+            app._render_openclaw_wizard_step(
+                {
+                    "id": "future-api-key",
+                    "type": "text",
+                    "title": "Future Provider",
+                    "message": "Enter API key",
+                    "sensitive": True,
+                }
+            )
+            field = app.query_one("#openclaw-wizard-input")
+            assert field.password is True
+            assert field.display is True
+
+    asyncio.run(scenario())
+
+
+def test_openclaw_future_provider_select_is_data_driven():
+    async def scenario():
+        app = JervisInstaller()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app._switch(5)
+            value = {"provider": "future-provider", "method": "magic"}
+            app._render_openclaw_wizard_step(
+                {
+                    "id": "provider",
+                    "type": "select",
+                    "message": "Choose provider",
+                    "options": [
+                        {
+                            "label": "Future Provider",
+                            "hint": "Added by a future OpenClaw/plugin release",
+                            "value": value,
+                        }
+                    ],
+                }
+            )
+            assert app.openclaw_wizard_option_values == [value]
+            assert app.query_one("#openclaw-wizard-select").display is True
+
+    asyncio.run(scenario())
+
+
+def test_openclaw_multiselect_renders_arbitrary_options():
+    async def scenario():
+        app = JervisInstaller()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app._switch(5)
+            app._render_openclaw_wizard_step(
+                {
+                    "id": "channels",
+                    "type": "multiselect",
+                    "message": "Choose channels",
+                    "options": [
+                        {"label": "Alpha", "value": "alpha"},
+                        {"label": "Beta", "value": "beta"},
+                    ],
+                    "initialValue": ["beta"],
+                }
+            )
+            assert app.openclaw_wizard_option_values == ["alpha", "beta"]
+            assert app.query_one("#openclaw-wizard-input").value == "2"
+
+    asyncio.run(scenario())

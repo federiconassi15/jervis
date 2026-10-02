@@ -117,6 +117,7 @@ The 7.3 runtime is optimized around lower voice-turn latency, while 7.3.1 adds h
 - `jervis runtime-info` to show the active acceleration backend,
 - `jervis benchmark` for local and recent live latency measurements,
 - Unicode-framed installation Control Deck with terminal-native BEL/console cues for boot, attention, install start, and completion.
+- OpenClaw's live onboarding wizard rendered inside Jervis, so provider/API/plugin support follows the installed OpenClaw version instead of a Jervis-maintained list.
 
 See [7.3.1 release notes](docs/releases/7.3.1.md) for the current code-derived change list and [7.3.0 release notes](docs/releases/7.3.0.md) for the original 7.3 runtime rebuild.
 

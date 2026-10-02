@@ -1,79 +1,56 @@
 # Installer: OpenClaw Setup
 
-Jervis 7.3.1 owns the OpenClaw first-run experience. The user answers OpenClaw setup questions inside the Jervis Installation Control Deck rather than being dropped into the raw OpenClaw wizard.
+Jervis 7.3.1 owns the visible OpenClaw onboarding experience.
 
-## What Jervis collects
+## Design
 
-The Brain step can collect and apply:
+The installer does **not** maintain its own provider/API list.
 
-- model provider / authentication route
-- provider API key or token where required
-- OpenClaw agent name
-- custom-provider base URL, model ID, provider ID, compatibility mode, and image-input capability
-- Gateway bind mode
-- Gateway authentication mode and credential
-- Gateway daemon install choice
-- daemon runtime (Node or Bun)
-- Node package manager for skills
-- optional skills, hooks, channels, and web-search setup choices
-- explicit acknowledgement of OpenClaw's agent/system-access risk
+After the Jervis core install is verified, Jervis:
 
-Provider and Gateway secrets are masked in the installer and are never shown on the final review screen.
+1. quietly installs OpenClaw if it is missing,
+2. starts an isolated loopback-only temporary OpenClaw Gateway,
+3. starts OpenClaw's own `wizard.start` onboarding session,
+4. renders each upstream wizard step inside the Jervis Installation Control Deck,
+5. submits answers with `wizard.next`,
+6. closes the temporary Gateway when onboarding completes.
 
-## Supported model/auth routes
+Because OpenClaw supplies the wizard steps at runtime, Jervis automatically inherits current and future built-in providers, plugin-provided providers, API-key/token flows, OAuth/device-code flows, custom endpoints, channels, search providers, skills, Gateway configuration, daemon choices, and other onboarding additions supported by that OpenClaw release.
 
-The provider picker is data-driven and includes a large current OpenClaw catalog covering direct vendor APIs, hosted gateways, local runtimes, and official provider plugins.
+## Supported wizard controls
 
-Current first-class choices include OpenAI, Anthropic, Gemini, OpenRouter, Mistral, Z.AI variants, Vercel AI Gateway, Arcee, Cerebras, Hugging Face, Fireworks, Together, DeepSeek, Groq, DeepInfra, Cohere, ClawRouter, Tencent TokenHub/TokenPlan, NVIDIA, Featherless, LiteLLM, Meta, Qwen, GMI Cloud, Baseten, Kilo Gateway, Moonshot/Kimi, MiniMax API, Synthetic, Runway, Alibaba Model Studio, Ollama, LM Studio, vLLM, and llama.cpp.
+Jervis currently renders every OpenClaw wizard step family:
 
-### Universal OpenClaw Provider
+- note
+- text
+- sensitive text / API-key input
+- select
+- confirm
+- multiselect
+- progress
+- action
 
-For an OpenClaw provider added after the current Jervis release, choose **Any OpenClaw provider · advanced pass-through** and enter:
+Sensitive text fields are masked. Their values are never shown in the Jervis review screen or normal installer logs.
 
-- the OpenClaw `--auth-choice` id
-- the provider credential environment-variable name, when required
-- the credential itself
-- an optional official OpenClaw plugin package
-- optional base URL/model values where that provider uses them
+## Headless behavior
 
-Jervis still runs onboarding with `--non-interactive`; the raw OpenClaw wizard remains hidden.
+The same renderer is used in Desktop and Server mode.
 
-## Supported model/auth routes
+If an upstream provider offers a device-code or browser authorization flow, OpenClaw sends the authorization URL/code through the wizard session and Jervis displays it inside the control deck. A headless user can complete the authorization from another device without leaving the Jervis setup flow.
 
-Jervis currently exposes:
+## Provider coverage
 
-- ChatGPT / Codex subscription
-- OpenAI API key
-- Anthropic API key
-- Google Gemini API key
-- OpenRouter API key
-- Mistral API key
-- Z.AI API key
-- xAI / Grok OAuth
-- GitHub Copilot token
-- custom OpenAI-compatible, OpenAI Responses-compatible, or Anthropic-compatible providers
-- Ollama
-- LM Studio
-- configure later
+Provider coverage is intentionally **OpenClaw-defined**, not Jervis-defined.
 
-API-key, token, custom, and local-provider paths are driven through OpenClaw's supported non-interactive onboarding interface.
+That means there is no static "supported APIs" list in Jervis to become stale. Providers added by a newer OpenClaw release or an installed provider plugin appear when OpenClaw includes them in its wizard.
 
-## External authorization
+## Failure behavior
 
-Browser/device authorization cannot be replaced by a local installer form. ChatGPT/Codex and xAI OAuth therefore finish with an explicit Jervis authorization step after the core install.
-
-Server-mode ChatGPT/Codex authorization uses device code so the Gateway host can remain headless.
-
-## No raw OpenClaw wizard
-
-For automated provider paths Jervis invokes OpenClaw with non-interactive onboarding and suppresses the OpenClaw UI. If OpenClaw cannot complete a selected path without an external authorization or capability review, Jervis reports that state instead of silently opening another wizard.
-
-## Safety
-
-Jervis does not auto-accept OpenClaw's agent/system-access warning. The user must explicitly acknowledge it in the Jervis installer.
+The Jervis core remains installed if OpenClaw onboarding fails. The installer shows a retry action and explains that upstream OpenClaw may already have saved earlier wizard answers; Jervis does not claim those writes were rolled back.
 
 ## Related pages
 
-- [Installer index](installer-index.md)
 - [OpenClaw Authentication](openclaw-authentication.md)
 - [Getting Started: OpenClaw Setup](getting-started-openclaw-setup.md)
+- [Installer index](installer-index.md)
+- [Wiki Home](Home.md)
