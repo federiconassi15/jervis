@@ -1,5 +1,4 @@
-7.3.5
-Validated main commit: ea0ec99acdca302b195cfa064545de59929e81ae
-Validated resilience CI: 36989162377
-Validated main CI: 36989666437
-Purpose: publish Jervis 7.3.5 resilience and snapshot rollback release.
+7.3.6
+Validated implementation commit: 3fe174df8f1a214dc730cf33ec9bb995c46531af
+Validated feature CI: 36997544627
+Purpose: publish Jervis 7.3.6 quiet, resize-safe installer release.
