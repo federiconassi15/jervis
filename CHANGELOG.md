@@ -4,7 +4,63 @@ All notable public changes to Jervis are documented here.
 
 Release descriptions are derived from actual code diffs and mirrored in `docs/releases/`.
 
-## [7.3.5] - Unreleased
+## [7.4.0] - 2026-10-02
+
+### Added
+
+- Rebuilt installer and Control Deck navigation around a responsive sidebar with narrow-terminal fallbacks.
+- Query-aware memory, rolling session summaries, memory provenance/importance, and correction-aware context.
+- Presence history, active-speaker handoff tracking, proactive reminders/condition watches, and busy-window handling.
+- Agent capability/run history, cancellable long-running agent execution, permission-escalation records, and action timelines.
+- Control Deck views for memory, presence, proactive work, agents, benchmarks, and recovery controls.
+
+### Changed
+
+- Replaced the 7.3 animated installer shell and horizontal setup rail with semantic sidebar stages and independently scrollable pages.
+- Context retrieval now ranks memories against the current request and prefers compact session summaries over full transcript replay.
+- Presence-aware proactive delivery queues work while users are away or busy.
+- Long-running OpenClaw CLI calls use a cancellable process-tree path while normal low-thinking HTTP calls retain the latency fast path.
+
+### Removed
+
+- The 7.3 installer hero animation and horizontal numbered subsystem rail.
+- Desktop/Server deployment dropdown as the primary mode selector.
+- Silent skipping of matched privileged skills that provide a safe matcher.
+
+### Fixed
+
+- Server mode is visible immediately during deployment selection.
+- Installer and Control Deck navigation remain usable across live terminal resizing.
+- Agent cancellation terminates the relevant process tree instead of only a wrapper process.
+- Condition watches only announce after their predicate becomes true, and expired proactive work is retired.
+- Privileged skill matches can explain required permission without executing the handler.
+
+## [7.3.6] - 2026-10-02
+
+### Added
+
+- Responsive installer modes for normal, compact, and tiny terminals with live resize handling.
+- Regression coverage for wide-to-narrow-to-wide installer resizing.
+- Quiet Linux dependency execution with bounded failure output.
+
+### Changed
+
+- POSIX and Windows bootstrap downloads use quiet transfer behavior with Jervis-owned status messages.
+- Linux prerequisite installation uses quiet package-manager operation after interactive sudo authentication.
+- Installer framing, headings, hero, step rail, and navigation controls adapt to available terminal dimensions.
+
+### Removed
+
+- Public curl transfer meters and successful package-manager transaction noise.
+- Reliance on fixed-width decorative headings for core installer navigation.
+
+### Fixed
+
+- Live SSH/terminal resizing no longer leaves the installer using stale desktop-scale dimensions.
+- Small terminals retain a reachable, scrollable page viewport and bottom navigation.
+- Package-manager failures remain visible as concise actionable tails.
+
+## [7.3.5] - 2026-10-02
 
 ### Added
 
@@ -25,7 +81,7 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 - Backup restore preserves snapshot identity.
 - Mutable-state restore preserves model/tool caches.
 
-## [7.3.0] - Unreleased
+## [7.3.0] - 2026-10-02
 
 ### Added
 
