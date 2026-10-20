@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -80,11 +81,11 @@ def test_install_non_tty_fails_closed(monkeypatch, capsys):
 
 
 def test_home_non_tty_only_prints_commands(monkeypatch, capsys):
-    monkeypatch.setattr(simple_ui.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(simple_ui.sys, "stdin", SimpleNamespace(isatty=lambda: False))
     assert simple_ui.home() == 0
     out = capsys.readouterr().out
     assert "jervis status" in out
-    assert "jervis install" not in out or "jervis status" in out
+    assert "jervis --help" in out
 
 
 def test_launcher_override_must_exist(monkeypatch, tmp_path):
