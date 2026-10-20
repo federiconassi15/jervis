@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jervis-assistant"
-version = "7.4.0"
+version = "8.0.0"
 description = "Low-latency, cross-platform, always-on voice assistant powered by OpenClaw"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,7 +28,7 @@ dev = ["pytest>=8,<10", "ruff>=0.9,<1", "pyyaml>=6,<7", "build>=1.2,<2"]
 
 [project.scripts]
 jervis = "jervis.cli:main"
-jervis-installer = "jervis.installer:main"
+jervis-installer = "jervis.simple_ui:installer_entry"
 
 [tool.setuptools.packages.find]
 where = ["src"]
