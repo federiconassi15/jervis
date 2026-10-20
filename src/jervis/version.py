@@ -1,2 +1,2 @@
-__version__ = "7.4.0"
-VERSION_INFO = (7, 4, 0)
+__version__ = "8.0.0"
+VERSION_INFO = (8, 0, 0)
