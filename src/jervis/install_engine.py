@@ -11,7 +11,6 @@ from .config import DEFAULT_CONFIG, load, save
 from .install_plan import InstallOutcome, InstallPlan
 from .install_resume import clear_resume, read_resume, write_resume
 from .install_tx import InstallTransaction
-from .openclaw_compat import check_openclaw_compatibility
 from .openclaw_setup import doctor as openclaw_doctor
 from .openclaw_setup import find_openclaw, install_official
 from .paths import Paths
@@ -237,13 +236,6 @@ def run_install(
                 )
 
         transaction.commit()
-
-    compat = check_openclaw_compatibility()
-    if outcome.openclaw_needs_wizard and compat.installed and not compat.wizard_rpc:
-        outcome.warnings.append(
-            "Installed OpenClaw does not expose the Gateway RPC interface required "
-            "for embedded setup. Update OpenClaw before guided onboarding."
-        )
 
     for check in run_acceptance(paths):
         if check.ok:
