@@ -18,7 +18,7 @@ from .benchmark import (
 from .diagnostics import create_diagnostics_bundle
 from .doctor import run_doctor
 from .fast import NATIVE_AVAILABLE, backend_name
-from .installer import install
+from .simple_ui import home as run_home, install
 from .openclaw_compat import check_openclaw_compatibility
 from .permissions_audit import audit_permissions
 from .paths import Paths
@@ -28,7 +28,6 @@ from .runtime import Runtime
 from .snapshots import create_snapshot, list_snapshots, restore_snapshot
 from .status import collect_status, render_status
 from .state import State
-from .tui import run as run_tui
 from .uninstall import uninstall
 from .updater import apply_update, check as check_update, rollback_update
 from .version import __version__
@@ -51,7 +50,8 @@ def main(argv=None) -> None:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--safe-mode", action="store_true")
 
-    subparsers.add_parser("tui")
+    subparsers.add_parser("home", help="Simple, non-fullscreen menu")
+    subparsers.add_parser("tui", help="Compatibility alias for the simple menu")
 
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--bundle", nargs="?", const="", default=None)
@@ -143,12 +143,12 @@ def main(argv=None) -> None:
     presence_history.add_argument("--json", action="store_true", dest="as_json")
 
     args = parser.parse_args(argv)
-    command = args.command or "tui"
+    command = args.command or "home"
 
     if command == "run":
         Runtime(safe_mode=args.safe_mode).run()
-    elif command == "tui":
-        run_tui()
+    elif command in {"home", "tui"}:
+        raise SystemExit(run_home())
     elif command == "doctor":
         report = run_doctor()
         print(report.render())
