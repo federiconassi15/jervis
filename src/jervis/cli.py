@@ -159,7 +159,8 @@ def main(argv=None) -> None:
     elif command == "install":
         raise SystemExit(install())
     elif command == "reinstall":
-        uninstall(purge_data=False, remove_binary=False)
+        # Reconfiguration is transactional and snapshot-backed. Never remove the
+        # working installation before the user confirms the new setup.
         raise SystemExit(install())
     elif command == "uninstall":
         snap = uninstall(
