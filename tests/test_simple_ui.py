@@ -111,3 +111,15 @@ def test_tui_command_is_simple_compatibility_alias(monkeypatch):
     with pytest.raises(SystemExit):
         cli.main(["tui"])
     assert called == ["simple"]
+
+def test_reinstall_does_not_uninstall_before_confirmed_setup(monkeypatch):
+    from jervis import cli
+    calls = []
+    monkeypatch.setattr(cli, "install", lambda: calls.append("install") or 130)
+    monkeypatch.setattr(
+        cli, "uninstall", lambda **_kwargs: calls.append("uninstall")
+    )
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["reinstall"])
+    assert exc.value.code == 130
+    assert calls == ["install"]
