@@ -44,7 +44,7 @@ The native installer:
 - verifies health before committing the install,
 - rolls back failed installation changes instead of leaving a half-install.
 
-Jervis 8 uses **numbered terminal prompts** (Enter accepts the visible default; `q` cancels), not a fullscreen TUI. Passphrases are entered without echo. `jervis` opens a simple menu in a terminal and prints command hints when run without one. `jervis tui` remains a compatibility alias for the same plain menu. All existing explicit commands such as `jervis run`, `jervis doctor`, and `jervis status --json` remain supported.
+Jervis 8 uses **numbered terminal prompts** (Enter accepts the visible default; `q` cancels), not a fullscreen TUI. Passphrases are entered without echo. `jervis` opens a simple menu in a terminal and prints command hints when run without one. `jervis tui` remains a compatibility alias for the same plain menu. If you need a feature from the old Control Deck that has not been ported to direct commands yet, `jervis legacy-tui` is available as an opt-in fallback. All existing explicit commands such as `jervis run`, `jervis doctor`, and `jervis status --json` remain supported.
 
 ### Manual native downloads
 
@@ -94,6 +94,7 @@ Jervis identifies from the longer natural command rather than trying to authenti
 
     jervis
     jervis home
+    jervis legacy-tui
     jervis run
     jervis doctor
     jervis install
@@ -120,7 +121,7 @@ Jervis identifies from the longer natural command rather than trying to authenti
 
 ## 8.0 — Simple by Default
 
-The default home and installer no longer require Textual, curses, mouse support, terminal-resize handling, or a continuously repainted screen. Setup uses ordinary numbered choices and invokes the existing transactional engine. Guided OpenClaw setup is delegated to `openclaw onboard` rather than embedded in a Jervis TUI. The old TUI sources are retained for legacy test and migration compatibility but are not launched by the public entry points. See [8.0.0 release notes](docs/releases/8.0.0.md).
+The default home and installer no longer require Textual, curses, mouse support, terminal-resize handling, or a continuously repainted screen. Setup uses ordinary numbered choices and invokes the existing transactional engine. Guided OpenClaw setup is delegated to `openclaw onboard` rather than embedded in a Jervis TUI. The old Control Deck remains available only through the explicit `jervis legacy-tui` fallback; neither normal entry point launches it. See [8.0.0 release notes](docs/releases/8.0.0.md).
 
 ## 7.4 “Feels Alive”
 
