@@ -52,6 +52,7 @@ def main(argv=None) -> None:
 
     subparsers.add_parser("home", help="Simple, non-fullscreen menu")
     subparsers.add_parser("tui", help="Compatibility alias for the simple menu")
+    subparsers.add_parser("legacy-tui", help="Opt-in old Control Deck (may not work on all terminals)")
 
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--bundle", nargs="?", const="", default=None)
@@ -149,6 +150,10 @@ def main(argv=None) -> None:
         Runtime(safe_mode=args.safe_mode).run()
     elif command in {"home", "tui"}:
         raise SystemExit(run_home())
+    elif command == "legacy-tui":
+        from .tui import run as run_legacy_tui
+
+        run_legacy_tui()
     elif command == "doctor":
         report = run_doctor()
         print(report.render())
