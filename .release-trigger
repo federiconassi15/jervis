@@ -1,5 +1,5 @@
-7.4.0
-Validated implementation commit: 4f3c8919999a833b4c74953117bc57aa99762a85
-Validated feature CI: 37003698226
-Validated main CI: 37004192384
-Purpose: publish Jervis 7.4.0 Feels Alive with the rebuilt installer, continuity, presence, proactive watches, agent orchestration, and Control Deck.
+8.0.0
+Implementation merge commit: b541ab9bfbdbfad0c64da6ae3257311da1d9a08a
+Validated feature CI: 39439214426 (12/12 successful)
+Main CI: 39537958478 (started; independent post-merge verification)
+Purpose: publish Jervis 8.0.0 Simple by Default, using plain terminal menus and setup, preserved recovery and runtime, and updated artifact actions.
