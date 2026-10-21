@@ -4,6 +4,30 @@ All notable public changes to Jervis are documented here.
 
 Release descriptions are derived from actual code diffs and mirrored in `docs/releases/`.
 
+## [8.0.0] - 2026-10-21
+
+### Added
+
+- Plain terminal home menu and numbered installer prompts with defaults, cancellation, audio-device selection, and masked local owner passphrase entry.
+- Explicit `jervis home` and `jervis legacy-tui` commands.
+
+### Changed
+
+- Default `jervis`, `jervis tui`, `jervis install`, and `jervis-installer` entry points use non-fullscreen terminal flows; the former Control Deck remains opt-in.
+- `jervis reinstall` uses the existing snapshot-backed setup engine without uninstalling before confirmation.
+- OpenClaw onboarding runs as a separate upstream CLI step after Jervis core installation.
+- CI and release action versions were updated, and release version validation now targets 8.x.
+
+### Removed
+
+- Dependence on fullscreen redraws, mouse events, and special-key navigation in the default installer and home entry points; legacy UI modules remain available.
+
+### Fixed
+
+- Non-interactive `jervis` invocation prints command hints instead of entering a fullscreen interface.
+- Setup cancellation before confirmation leaves the installation unchanged.
+- Interrupted OpenClaw onboarding no longer implies that the completed Jervis core installation rolled back.
+
 ## [7.4.0] - 2026-10-02
 
 ### Added
