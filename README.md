@@ -2,7 +2,7 @@
 
 > A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis 7.4.0 is a low-latency, continuity-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a terminal Control Deck, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
+Jervis 8.0.0 is a low-latency, continuity-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a plain, command-first terminal menu, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
 ## Install
 
@@ -44,7 +44,7 @@ The native installer:
 - verifies health before committing the install,
 - rolls back failed installation changes instead of leaving a half-install.
 
-Installer navigation is designed around **arrow keys and mouse input**. Text entry is only used where actual text is unavoidable, such as the owner name or passphrase.
+Jervis 8 uses **numbered terminal prompts** (Enter accepts the visible default; `q` cancels), not a fullscreen TUI. Passphrases are entered without echo. `jervis` opens a simple menu in a terminal and prints command hints when run without one. `jervis tui` remains a compatibility alias for the same plain menu. If you need a feature from the old Control Deck that has not been ported to direct commands yet, `jervis legacy-tui` is available as an opt-in fallback. All existing explicit commands such as `jervis run`, `jervis doctor`, and `jervis status --json` remain supported.
 
 ### Manual native downloads
 
@@ -93,6 +93,8 @@ Jervis identifies from the longer natural command rather than trying to authenti
 ## Commands
 
     jervis
+    jervis home
+    jervis legacy-tui
     jervis run
     jervis doctor
     jervis install
@@ -116,6 +118,10 @@ Jervis identifies from the longer natural command rather than trying to authenti
     jervis runtime-info
     jervis benchmark
     jervis benchmark --json
+
+## 8.0 — Simple by Default
+
+The default home and installer no longer require Textual, curses, mouse support, terminal-resize handling, or a continuously repainted screen. Setup uses ordinary numbered choices and invokes the existing transactional engine. Guided OpenClaw setup is delegated to `openclaw onboard` rather than embedded in a Jervis TUI. The old Control Deck remains available only through the explicit `jervis legacy-tui` fallback; neither normal entry point launches it. See [8.0.0 release notes](docs/releases/8.0.0.md).
 
 ## 7.4 “Feels Alive”
 
