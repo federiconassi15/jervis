@@ -4,6 +4,12 @@ All notable public changes to Jervis are documented here.
 
 Release descriptions are derived from actual code diffs and mirrored in `docs/releases/`.
 
+## Unreleased
+
+### Fixed
+
+- POSIX bootstrap removes its temporary native payload and checksum after the installer exits, including failed exits, while preserving the native exit status.
+
 ## [8.0.0] - 2026-10-21
 
 ### Added

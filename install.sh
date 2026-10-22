@@ -119,4 +119,4 @@ say "└─ launching installation control deck ──────────�
 printf '\007'
 sleep 0.06
 printf '\007'
-exec "$tmp/$asset"
+"$tmp/$asset"
