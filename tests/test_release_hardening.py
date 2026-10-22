@@ -18,7 +18,7 @@ def answers(*items):
     return lambda _prompt: next(stream)
 
 
-@pytest.mark.parametrize("bad", ["0", "-1", "9999999999999999999999", "1.5", "one", "１", "²", "0x1", " ", "1x"])
+@pytest.mark.parametrize("bad", ["0", "-1", "9999999999999999999999", "1.5", "one", "１", "²", "0x1", "1x"])
 def test_choice_rejects_invalid_or_ambiguous_selection(bad, capsys):
     result = simple_ui._choice("Choose", [("A", "a"), ("B", "b")], 2, answers(bad, "1"))
     assert result == "a"
@@ -142,3 +142,7 @@ def test_secret_mismatch_retries_without_disclosing_secret(capsys):
     printed = capsys.readouterr().out
     assert "firstsecret" not in printed
     assert "secondsecret" not in printed
+
+
+def test_whitespace_only_choice_accepts_documented_default():
+    assert simple_ui._choice("Choose", [("A", "a"), ("B", "b")], 2, answers("   ")) == "b"
