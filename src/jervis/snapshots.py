@@ -49,8 +49,14 @@ def create_snapshot(
     resolved = paths or Paths.resolve()
     resolved.ensure()
     stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-    snapshot_id = stamp + "-" + _safe_reason(reason)
-    archive = _root(resolved) / (snapshot_id + ".tar.gz")
+    base_id = stamp + "-" + _safe_reason(reason)
+    snapshot_id = base_id
+    root = _root(resolved)
+    suffix = 1
+    while (root / (snapshot_id + ".tar.gz")).exists():
+        snapshot_id = f"{base_id}-{suffix}"
+        suffix += 1
+    archive = root / (snapshot_id + ".tar.gz")
     metadata = SnapshotInfo(
         id=snapshot_id,
         created_at=time.time(),
@@ -158,14 +164,6 @@ def restore_snapshot(
     if make_guard:
         create_snapshot("pre-rollback-guard", paths=resolved, include_binary=False)
 
-    adapter = current_platform()
-    was_installed = adapter.service_installed()
-    try:
-        if was_installed:
-            adapter.stop_service()
-    except Exception:
-        pass
-
     with tempfile.TemporaryDirectory(prefix="jervis-restore-", dir=resolved.cache) as tmp:
         staging = Path(tmp)
         with tarfile.open(archive, "r:gz") as bundle:
@@ -175,71 +173,80 @@ def restore_snapshot(
                     raise RuntimeError("unsafe path in snapshot")
                 if member.issym() or member.islnk():
                     raise RuntimeError("snapshot contains unsupported link entry")
-            bundle.extractall(staging)
+                if not (member.isfile() or member.isdir()):
+                    raise RuntimeError("snapshot contains unsupported entry type")
+            bundle.extractall(staging, filter="data")
 
         data = json.loads((staging / "snapshot.json").read_text(encoding="utf-8"))
         info = SnapshotInfo(**data)
 
-        config_src = staging / "config"
-        if config_src.exists():
-            if resolved.config.exists():
-                shutil.rmtree(resolved.config)
-            shutil.copytree(config_src, resolved.config)
+        # Validate and stage the entire archive before touching the running service.
+        adapter = current_platform()
+        was_installed = bool(adapter.service_installed())
+        try:
+            if was_installed:
+                adapter.stop_service()
+            config_src = staging / "config"
+            if config_src.exists():
+                if resolved.config.exists():
+                    shutil.rmtree(resolved.config)
+                shutil.copytree(config_src, resolved.config)
 
-        data_src = staging / "data"
-        if data_src.exists():
-            resolved.data.mkdir(parents=True, exist_ok=True)
-            for item in list(resolved.data.iterdir()):
-                if item.name in {"snapshots", "models", "tools"}:
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink(missing_ok=True)
-            for item in data_src.iterdir():
-                target = resolved.data / item.name
-                if item.is_dir():
-                    shutil.copytree(item, target)
-                else:
-                    shutil.copy2(item, target)
+            data_src = staging / "data"
+            if data_src.exists():
+                resolved.data.mkdir(parents=True, exist_ok=True)
+                for item in list(resolved.data.iterdir()):
+                    if item.name in {"snapshots", "models", "tools"}:
+                        continue
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink(missing_ok=True)
+                for item in data_src.iterdir():
+                    target = resolved.data / item.name
+                    if item.is_dir():
+                        shutil.copytree(item, target)
+                    else:
+                        shutil.copy2(item, target)
 
-        if restore_binary:
-            binary_dir = staging / "binary"
-            binaries = list(binary_dir.iterdir()) if binary_dir.exists() else []
-            current = Path(sys.executable)
-            if binaries and current.exists() and os.access(current.parent, os.W_OK):
-                if platform.system() == "Windows" and getattr(sys, "frozen", False):
-                    staged_binary = resolved.cache / "rollback-binary.exe"
-                    shutil.copy2(binaries[0], staged_binary)
-                    script = resolved.cache / "finish-rollback.ps1"
-                    script.write_text(
-                        "Start-Sleep -Milliseconds 900\n"
-                        "$src=" + repr(str(staged_binary)) + "\n"
-                        "$dst=" + repr(str(current)) + "\n"
-                        "Copy-Item -LiteralPath $src -Destination $dst -Force\n",
-                        encoding="utf-8",
-                    )
-                    subprocess.Popen(
-                        [
-                            "powershell",
-                            "-NoProfile",
-                            "-WindowStyle",
-                            "Hidden",
-                            "-ExecutionPolicy",
-                            "Bypass",
-                            "-File",
-                            str(script),
-                        ],
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
-                else:
-                    temp = current.with_name(current.name + ".rollback")
-                    shutil.copy2(binaries[0], temp)
-                    os.replace(temp, current)
+            if restore_binary:
+                binary_dir = staging / "binary"
+                binaries = list(binary_dir.iterdir()) if binary_dir.exists() else []
+                current = Path(sys.executable)
+                if binaries and current.exists() and os.access(current.parent, os.W_OK):
+                    if platform.system() == "Windows" and getattr(sys, "frozen", False):
+                        staged_binary = resolved.cache / "rollback-binary.exe"
+                        shutil.copy2(binaries[0], staged_binary)
+                        script = resolved.cache / "finish-rollback.ps1"
+                        script.write_text(
+                            "Start-Sleep -Milliseconds 900\n"
+                            "$src=" + repr(str(staged_binary)) + "\n"
+                            "$dst=" + repr(str(current)) + "\n"
+                            "Copy-Item -LiteralPath $src -Destination $dst -Force\n",
+                            encoding="utf-8",
+                        )
+                        subprocess.Popen(
+                            [
+                                "powershell",
+                                "-NoProfile",
+                                "-WindowStyle",
+                                "Hidden",
+                                "-ExecutionPolicy",
+                                "Bypass",
+                                "-File",
+                                str(script),
+                            ],
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        )
+                    else:
+                        temp = current.with_name(current.name + ".rollback")
+                        shutil.copy2(binaries[0], temp)
+                        os.replace(temp, current)
 
-    try:
-        if was_installed:
-            adapter.start_service()
-    except Exception:
-        pass
+        finally:
+            if was_installed:
+                try:
+                    adapter.start_service()
+                except Exception:
+                    pass
     return info
