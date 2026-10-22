@@ -15,6 +15,7 @@ from .benchmark import (
     main_json,
     run_benchmark,
 )
+from .evolve import health_summary, render_plugins, resolve_offline
 from .diagnostics import create_diagnostics_bundle
 from .doctor import run_doctor
 from .fast import NATIVE_AVAILABLE, backend_name
@@ -75,6 +76,11 @@ def main(argv=None) -> None:
     )
 
     subparsers.add_parser("runtime-info")
+    subparsers.add_parser("health", help="Read-only local recovery and service inventory")
+    offline_parser = subparsers.add_parser("offline", help="Resolve a local command without internet")
+    offline_parser.add_argument("text", nargs="+")
+    plugins_parser = subparsers.add_parser("plugins", help="List validated plugin manifests")
+    plugins_parser.add_argument("--json", action="store_true", dest="as_json")
 
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -183,6 +189,23 @@ def main(argv=None) -> None:
         )
         print(json.dumps(asdict(result), indent=2))
         raise SystemExit(0 if result.ok else 1)
+    elif command == "health":
+        print(json.dumps(health_summary(), indent=2))
+    elif command == "offline":
+        intent = resolve_offline(" ".join(args.text))
+        if intent is None:
+            print("Unknown offline command. No action taken.")
+            raise SystemExit(2)
+        print(intent.response)
+    elif command == "plugins":
+        items = render_plugins()
+        if args.as_json:
+            print(json.dumps(items, indent=2))
+        elif not items:
+            print("No validated plugin manifests found.")
+        else:
+            for item in items:
+                print(item["identifier"] + " " + item["version"])
     elif command == "runtime-info":
         print(
             json.dumps(
