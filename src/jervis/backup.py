@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import filecmp
 import json
+import re
 import shutil
 import tarfile
 import tempfile
@@ -29,15 +31,25 @@ def restore_backup(source: Path, *, paths: Paths | None = None) -> None:
     if not source.exists():
         raise FileNotFoundError(str(source))
 
-    create_snapshot("pre-backup-restore", paths=resolved, include_binary=False)
-    snapshots = resolved.data / "snapshots"
-    snapshots.mkdir(parents=True, exist_ok=True)
     with tarfile.open(source, "r:gz") as bundle:
         raw = bundle.extractfile("snapshot.json")
         if raw is None:
             raise RuntimeError("backup is missing snapshot metadata")
         metadata = json.loads(raw.read().decode("utf-8"))
 
-    imported = snapshots / (str(metadata["id"]) + ".tar.gz")
-    shutil.copy2(source, imported)
-    restore_snapshot(str(metadata["id"]), paths=resolved, make_guard=False)
+    snapshot_id = metadata.get("id") if isinstance(metadata, dict) else None
+    if not isinstance(snapshot_id, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", snapshot_id
+    ):
+        raise ValueError("backup has an unsafe snapshot identifier")
+
+    snapshots = resolved.data / "snapshots"
+    snapshots.mkdir(parents=True, exist_ok=True)
+    imported = snapshots / (snapshot_id + ".tar.gz")
+    if imported.exists() and not filecmp.cmp(source, imported, shallow=False):
+        raise RuntimeError("backup snapshot ID conflicts with a different saved snapshot")
+
+    create_snapshot("pre-backup-restore", paths=resolved, include_binary=False)
+    if not imported.exists():
+        shutil.copy2(source, imported)
+    restore_snapshot(snapshot_id, paths=resolved, make_guard=False)
