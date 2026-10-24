@@ -6,6 +6,12 @@ Welcome to the **Jervis 8.0** documentation. The Jervis 8.0.1 patch fixes Linux/
 
 Read the [8.0.1 release notes](https://github.com/federiconassi15/jervis/blob/main/docs/releases/8.0.1.md) or visit [GitHub Releases](https://github.com/federiconassi15/jervis/releases) for verified downloads.
 
+## Jervis 8.1 — Evolve development preview
+
+The next feature line is being implemented in [draft PR #3](https://github.com/federiconassi15/jervis/pull/3). The stable release remains **8.0.1**.
+
+Read the [complete Evolve overview](evolve-index.md) and its nine feature pages: [HyperCore](evolve-hypercore.md), [Adaptive Dialogue](evolve-local-dialogue.md), [Voice](evolve-voice-engine.md), [Self-Healing](evolve-self-healing.md), [Better CLI](evolve-better-cli.md), [Control Center](evolve-control-center.md), [Offline Commands](evolve-offline.md), [Plugins](evolve-plugins.md), [Companion](evolve-companion.md) and [Encrypted Backups](evolve-encrypted-backups.md). These pages describe development functionality and outstanding release gates, not claims of a shipped 8.1 version.
+
 ## Start here
 
 - [Installation](getting-started-installation.md)
