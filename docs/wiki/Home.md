@@ -1,33 +1,35 @@
 # Jervis Wiki
 
-Welcome to the Jervis **7.3** documentation.
+Welcome to the **Jervis 8.0** documentation. The Jervis 8.0.1 patch fixes Linux/macOS bootstrap security and temporary-file cleanup.
 
-The current stable release is **7.3.0**. **7.3.1 hardening is in development** and adds benchmarking, live latency telemetry, installer polish, terminal-native cues, and a formal dogfood/soak-test gate before 7.4.
+**Simple by Default:** `jervis` and `jervis home` open a plain terminal menu. `jervis install` uses numbered prompts with defaults, cancellation and a final review. The old fullscreen Control Deck is opt-in via `jervis legacy-tui`.
+
+Read the [8.0.1 release notes](https://github.com/federiconassi15/jervis/blob/main/docs/releases/8.0.1.md) or visit [GitHub Releases](https://github.com/federiconassi15/jervis/releases) for verified downloads.
 
 ## Start here
 
-- New user: [Getting Started](getting-started-index.md)
-- Install Jervis: [Installation](getting-started-installation.md)
-- Installer internals and UX: [Installer](installer-index.md)
-- Voice & latency: [Voice & Speech](voice-index.md)
-- Speaker identity: [Identity](identity-index.md)
-- OpenClaw integration: [OpenClaw](openclaw-index.md)
-- Control Deck: [Control Deck](control-deck-index.md)
-- Debugging: [Troubleshooting](troubleshooting-index.md)
-- Developer reference: [Development](development-index.md)
+- [Installation](getting-started-installation.md)
+- [Getting Started](getting-started-index.md)
+- [CLI Reference](reference-cli.md)
+- [Installer](installer-index.md)
+- [Voice & Speech](voice-index.md)
+- [OpenClaw integration](openclaw-index.md)
+- [Control Deck (legacy)](control-deck-index.md)
+- [Troubleshooting](troubleshooting-index.md)
+- [Development](development-index.md)
 
-## 7.3.1 hardening
+## Useful commands
 
-The 7.3.1 line is intentionally focused on proving the 7.3 runtime before larger 7.4 work.
-
-Highlights:
-
-- `jervis benchmark` for synthetic and recent live latency measurements
-- runtime metrics for inference, brain routing, and command-to-reply latency
-- public-install dogfood and soak-test checklist
-- Unicode-framed Installation Control Deck
-- terminal-native boot, attention, install-start, and completion cues
-- no bundled sound assets or extra audio dependency
+```text
+jervis
+jervis home
+jervis install
+jervis run
+jervis doctor
+jervis status
+jervis update-check
+jervis legacy-tui
+```
 
 ## All sections
 
@@ -37,7 +39,7 @@ Highlights:
 - [Voice & Speech](voice-index.md)
 - [Identity](identity-index.md)
 - [OpenClaw](openclaw-index.md)
-- [Control Deck](control-deck-index.md)
+- [Control Deck (legacy)](control-deck-index.md)
 - [Platforms](platforms-index.md)
 - [Installer](installer-index.md)
 - [Security](security-index.md)
@@ -50,7 +52,7 @@ Highlights:
 - [Troubleshooting](troubleshooting-index.md)
 - [Reference](reference-index.md)
 
-## Canonical project documents
+## Canonical documents
 
 - [Architecture](../ARCHITECTURE.md)
 - [Installer Specification](../INSTALLER_SPEC.md)
@@ -58,10 +60,10 @@ Highlights:
 - [Privacy](../PRIVACY.md)
 - [Roadmap](../ROADMAP.md)
 
+## Documentation history
+
+Many subsystem pages were originally written for Jervis 7.x. They remain useful as *historical technical references*, but may describe interfaces no longer used by default. Consult Installation, CLI Reference, and Versioning for the current 8.0 behavior.
+
 ## Product rules
 
-Jervis is one product across Linux, Windows, and macOS. Desktop and Server are deployment modes, not separate editions.
-
-The public build must remain generic. Never commit private IP addresses, personal filesystem paths, credentials, device serials, private transcripts, voiceprints, or machine-specific personal tailoring.
-
-Automated maintenance stays on the current major/minor line and may only advance the patch version after validation.
+Jervis is one product for Linux, Windows and macOS, with Desktop and Server deployment modes. Never publish credentials, private paths, logs, device identifiers, voiceprints or other personal state. Maintenance stays within the existing major/minor version line.

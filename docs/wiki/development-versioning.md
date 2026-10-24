@@ -2,47 +2,38 @@
 
 ## Current policy
 
-Jervis uses semantic-style `major.minor.patch` versions.
+Jervis uses `major.minor.patch` versions. The current stable maintenance line is **8.0.x**.
 
-The current public line is **7.3.x**:
+- **8.0.0** — plain terminal home and installer; legacy Control Deck is opt-in
+- **8.0.1** — POSIX bootstrap temporary-directory hardening and cleanup
+- **8.1.x** — separate feature line, excluded from automatic 8.0 maintenance
 
-- **7.3.0** — public runtime-speed rebuild
-- **7.3.1** — hardening/benchmarking/installer-polish maintenance release in development
-- **7.4.x** — future feature line, intentionally separate from 7.3 maintenance
+## Automated maintenance
 
-## Automated maintenance rule
+Only advance the **patch** component of the currently released major/minor line after verification.
 
-Automated maintenance may increment **only the patch component** on the current major/minor line after validation.
+```text
+8.0.0 -> 8.0.1    patch maintenance
+8.0.1 -> 8.0.2    patch maintenance
+8.0.x -> 8.1.0    not automatic
+8.x   -> 9.0.0    not automatic
+```
 
-Examples:
-
-    7.3.0 -> 7.3.1   allowed
-    7.3.1 -> 7.3.2   allowed
-    7.3.x -> 7.4.0   not automatic
-    7.x   -> 8.0.0   not automatic
-
-Dependency updates must be adapted and tested before pins move. Do not bump the Jervis version just because an upstream package released a newer build.
+Dependency changes must be adapted and tested before updating pins.
 
 ## Version sources
 
-The runtime/package version must remain aligned between:
+Keep these aligned:
 
 - `src/jervis/version.py`
 - `pyproject.toml`
-- release documentation
-- published release/tag
-
-Installer completion UI must read the active runtime version rather than hard-code an old release string.
+- `CHANGELOG.md`
+- `docs/releases/<version>.md`
+- published GitHub tag and release
 
 ## Release documentation
 
-Every release description must be derived from the actual code diff and document:
-
-- Added
-- Changed
-- Removed
-- Fixed
-- compatibility notes where relevant
+Every release description must reflect the actual code diff and include Added / Changed / Removed / Fixed sections, with compatibility and validation notes.
 
 ## Related pages
 

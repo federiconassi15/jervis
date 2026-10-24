@@ -2,42 +2,16 @@
 
 Jervis uses one native installer experience across Linux, Windows, and macOS.
 
-## 7.3.1 Installation Control Deck
+## Jervis 8.0.1 plain terminal setup
 
-The 7.3.1 installer keeps the existing transactional install engine but presents it as a Unicode-framed terminal control deck:
+The default installer uses numbered prompts with visible defaults, cancellation, masked owner passphrase entry and explicit final confirmation. The transactional install and recovery engine remains in place. The 8.0.1 POSIX bootstrap hardens private download directories and cleans temporary files on exit.
 
-1. Deployment Mode
-2. OpenClaw Brain
-3. Audio Matrix
-4. Identity Core
-5. Final Review
-6. Installation Sequence
-
-Major states use boxed terminal status panels rather than plain prose. Completion branding always uses the active Jervis version.
-
-### Terminal-native cues
-
-The installer uses terminal/console-generated cues, not media files:
-
-- boot: short double cue
-- install start: rising double cue
-- attention/error/sign-in required: stronger three-part cue
-- completion: short success chirp
-
-Windows uses console frequency beeps when available. Linux/macOS use terminal BEL. A terminal may render BEL audibly, visually, or ignore it.
-
-Disable cues:
-
-    JERVIS_TERMINAL_CUES=0
-
-Force them in a nonstandard terminal:
-
-    JERVIS_FORCE_TERMINAL_CUES=1
+The old 7.3 Installation Control Deck is historical UI documentation, not the Jervis 8 default. After installation, the former fullscreen Control Deck is accessible with `jervis legacy-tui` on supported terminals.
 
 ## Pages
 
 - [Overview](installer-overview.md)
-- [Control Deck UI](installer-blue-ui.md)
+- [Legacy 7.x Control Deck UI](installer-blue-ui.md)
 - [Banter & Cues](installer-banter.md)
 - [Preflight](installer-preflight.md)
 - [OS Detection](installer-os-detection.md)

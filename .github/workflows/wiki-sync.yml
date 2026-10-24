@@ -33,13 +33,31 @@ jobs:
           for source in src.glob("*.md"):
               text = source.read_text(encoding="utf-8")
 
-              # Keep legacy boilerplate from advertising obsolete release
-              # lines in the published Wiki. Feature-specific pages remain
-              # source-controlled and can override these generic labels.
-              text = text.replace("Jervis 7.1", "Jervis 7.3")
-              text = text.replace("7.1.x", "7.3.x")
-              text = text.replace("7.1 reliability line", "7.3 runtime line")
-              text = text.replace("current 7.1 line", "current 7.3 line")
+              # Retain original version facts on older pages and label them
+              # as historical, rather than falsely relabeling 7.x as 8.x.
+              current_pages = {
+                  "Home.md", "_Sidebar.md", "_Footer.md",
+                  "getting-started-index.md", "getting-started-installation.md",
+                  "getting-started-updates.md", "installer-index.md",
+                  "installer-overview.md", "development-index.md",
+                  "development-versioning.md", "development-release-workflow.md",
+                  "reference-cli.md",
+              }
+              if source.name not in current_pages and re.search(
+                  r"Jervis 7\.[134]|7\.3\.1 hardening|7\.1 reliability line",
+                  text, flags=re.IGNORECASE,
+              ):
+                  notice = (
+                      "> **Historical Jervis 7.x documentation.** This page may "
+                      "describe earlier interfaces. For Jervis 8 use "
+                      "[installation](getting-started-installation.md), "
+                      "[CLI reference](reference-cli.md), or "
+                      "[8.0.1 release notes](https://github.com/" + repo
+                      + "/blob/main/docs/releases/8.0.1.md).\n\n"
+                  )
+                  first, sep, rest = text.partition("\n")
+                  text = first + sep + "\n" + notice + rest
+
               text = re.sub(
                   r'\]\((?!https?://)([A-Za-z0-9_-]+)\.md\)',
                   lambda m: "](" + m.group(1) + ")",

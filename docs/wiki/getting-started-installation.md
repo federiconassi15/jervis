@@ -1,36 +1,47 @@
 # Getting Started: Installation
 
-## Public install
+Jervis 8.0.1 ships native binaries for Linux x64/ARM64, Windows x64, and macOS Intel/Apple Silicon. Fresh installs do not require Python, Node.js or a pre-existing virtual environment.
 
-Jervis ships self-contained native binaries. The bootstrap detects the host platform, downloads the matching release asset, verifies SHA-256, and launches the native installer.
+## Linux / macOS
 
-### Linux / macOS
+```sh
+curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
+```
 
-    curl -fsSL https://raw.githubusercontent.com/federiconassi15/jervis/main/install.sh | sh
+The bootstrap selects the native binary, verifies its SHA-256 checksum and runs the installer. In 8.0.1 downloaded temporary files and logs are placed inside a private, unpredictable directory and cleaned up when the installer exits.
 
-### Windows PowerShell
+## Windows PowerShell
 
-    irm https://raw.githubusercontent.com/federiconassi15/jervis/main/install.ps1 | iex
+```powershell
+irm https://raw.githubusercontent.com/federiconassi15/jervis/main/install.ps1 | iex
+```
 
-## What happens next
+## Setup experience in Jervis 8
 
-The native installer opens the Installation Control Deck and walks through deployment mode, OpenClaw, audio, identity, review, and the transactional installation sequence.
+The installer uses simple **numbered terminal prompts** for Desktop/Server mode, OpenClaw, audio selection, local owner authentication, and final review. Press Enter for the visible default or q to cancel before installation. Passphrases are masked. Installation uses the same transactional, rollback-backed engine.
 
-In 7.3.1 the bootstrap and installer also use Unicode framing and short terminal-native cues for boot, attention, install start, and completion.
+Guided OpenClaw onboarding runs through the official `openclaw onboard` CLI separately. The old fullscreen installer is no longer the default.
 
-## After installation
+## First commands
 
-    jervis
-    jervis doctor
-    jervis runtime-info
-    jervis benchmark
-    jervis benchmark --json
+```text
+jervis
+jervis doctor
+jervis status
+jervis runtime-info
+jervis update-check
+jervis benchmark
+```
 
-`jervis benchmark` is part of the 7.3.1 hardening line and reports local hot-path measurements plus recent live latency samples when available.
+`jervis` opens a plain menu; `jervis legacy-tui` opens the previous Control Deck on capable terminals.
+
+## Upgrades
+
+See [Updates](getting-started-updates.md). The native updater stays on the installed major/minor line unless a cross-line migration is deliberately planned.
 
 ## Privacy
 
-Do not commit credentials, passphrases, raw recordings, voiceprints, private dialogue, device serials, private IP addresses, or personal paths.
+Never publish passphrases, credentials, voiceprints, private transcripts, personal filesystem paths or device identifiers.
 
 ## Related pages
 
