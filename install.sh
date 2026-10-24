@@ -3,7 +3,8 @@ set -eu
 
 REPO="federiconassi15/jervis"
 BASE="https://github.com/$REPO/releases/latest/download"
-LOG="${TMPDIR:-/tmp}/jervis-bootstrap-$$.log"
+tmp=""
+LOG=""
 
 say() { printf '%s\n' "$*"; }
 die() { say "Jervis installer: $*" >&2; exit 1; }
@@ -97,10 +98,10 @@ case "$os:$arch" in
     *) die "unsupported platform: ${os:-unknown} ${arch:-unknown}" ;;
 esac
 
-ensure_downloader
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/jervis-install-XXXXXXXXXX")" || die "cannot create private temporary directory"
+LOG="$tmp/bootstrap.log"
 
-tmp="${TMPDIR:-/tmp}/jervis-install-$$"
-mkdir -p "$tmp"
+ensure_downloader
 
 say "Jervis · downloading runtime"
 fetch "$BASE/$asset" "$tmp/$asset"

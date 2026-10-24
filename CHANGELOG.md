@@ -8,6 +8,7 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 ### Fixed
 
+- POSIX bootstrap uses a private, unpredictable temporary directory for downloads and installer logs, preventing shared-temporary-directory precreation and symlink attacks.
 - POSIX bootstrap removes its temporary native payload and checksum after the installer exits, including failed exits, while preserving the native exit status.
 
 ## [8.0.0] - 2026-10-21

@@ -4,6 +4,7 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -27,6 +28,11 @@ def test_posix_bootstrap_cleans_downloads_and_preserves_exit_code(
         "  esac\n"
         "  shift\n"
         "done\n"
+        '"$JERVIS_TEST_PYTHON" -c '
+        "'import os, stat, sys; p = os.path.dirname(sys.argv[1]); "
+        "assert not os.path.islink(p); "
+        "assert stat.S_IMODE(os.stat(p).st_mode) == 0o700' "
+        '"$out" || exit 19\n'
         "case \"$url\" in\n"
         "  */SHA256SUMS) cp \"$JERVIS_TEST_SUMS\" \"$out\" ;;\n"
         "  *) cp \"$JERVIS_TEST_BINARY\" \"$out\" ;;\n"
@@ -54,10 +60,12 @@ def test_posix_bootstrap_cleans_downloads_and_preserves_exit_code(
         PATH=str(bin_dir) + os.pathsep + env.get("PATH", ""),
         JERVIS_TEST_SUMS=str(sums),
         JERVIS_TEST_BINARY=str(payload),
+        JERVIS_TEST_PYTHON=sys.executable,
     )
     script = Path(__file__).resolve().parents[1] / "install.sh"
     result = subprocess.run(
-        ["sh", str(script)], env=env, capture_output=True, text=True, timeout=30
+        ["sh", "-c", 'umask 022; exec sh "$1"', "jervis-bootstrap-test", str(script)],
+        env=env, capture_output=True, text=True, timeout=30
     )
 
     assert result.returncode == payload_exit_code, result.stderr
