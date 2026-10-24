@@ -20,6 +20,21 @@
 - [Troubleshooting](troubleshooting-index.md)
 - [Reference](reference-index.md)
 
+## Jervis 8.1 — draft
+
+- [Evolve overview](evolve-index.md)
+- [HyperCore](evolve-hypercore.md)
+- [Adaptive Dialogue](evolve-local-dialogue.md)
+- [Self-Healing](evolve-self-healing.md)
+- [Better CLI](evolve-better-cli.md)
+- [Voice Engine 2.0](evolve-voice-engine.md)
+- [Control Center](evolve-control-center.md)
+- [Offline Commands](evolve-offline.md)
+- [Plugin System](evolve-plugins.md)
+- [Companion Mode](evolve-companion.md)
+- [Encrypted Backups](evolve-encrypted-backups.md)
+- [Security & release gates](evolve-security-and-testing.md)
+
 ## Jervis 8.0
 
 - [Install / upgrade](getting-started-installation.md)

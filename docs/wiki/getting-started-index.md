@@ -23,6 +23,8 @@ Entry points for **Jervis 8.0.1**. The main menu and installer use plain termina
 - [Security Basics](getting-started-security-basics.md)
 - [Troubleshooting](getting-started-troubleshooting.md)
 
+**For developers:** [Jervis 8.1 Evolve](evolve-index.md) documents the next unreleased feature line.
+
 For current commands and setup behavior, see [CLI Reference](reference-cli.md) and [Installer](installer-index.md).
 
 [Back to Wiki Home](Home.md)

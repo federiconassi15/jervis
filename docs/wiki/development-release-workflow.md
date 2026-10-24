@@ -4,6 +4,10 @@
 
 **Jervis 8.0.x** is the current maintenance line. The 8.0.1 patch contains POSIX bootstrap cleanup and private-directory hardening; it does not bundle draft 8.1 functionality.
 
+## Jervis 8.1 release gate
+
+The Evolve draft must pass [security and release acceptance](evolve-security-and-testing.md) before its version is changed or a stable 8.1 tag is created. The current CI workflow is necessary but is not sufficient to prove hardware voice performance or LAN pairing security.
+
 ## Release source of truth
 
 ```text
