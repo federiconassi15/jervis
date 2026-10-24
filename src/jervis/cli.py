@@ -101,6 +101,27 @@ def main(argv=None) -> None:
     )
     subparsers.add_parser("repair-center")
 
+    center_parser = subparsers.add_parser(
+        "control-center", help="Start the private, read-only local web dashboard"
+    )
+    center_parser.add_argument("--port", type=int, default=0)
+
+    heal_parser = subparsers.add_parser(
+        "self-heal", help="Diagnose and explicitly repair safe local issues"
+    )
+    heal_sub = heal_parser.add_subparsers(dest="heal_command")
+    heal_plan = heal_sub.add_parser("plan")
+    heal_plan.add_argument("--json", action="store_true", dest="as_json")
+    heal_apply = heal_sub.add_parser("apply")
+    heal_apply.add_argument("component", choices=("permissions",))
+    heal_apply.add_argument("--yes", action="store_true")
+
+    perf_parser = subparsers.add_parser(
+        "hypercore", help="Fast-path performance probe and route metrics"
+    )
+    perf_parser.add_argument("--iterations", type=int, default=250)
+    perf_parser.add_argument("--json", action="store_true", dest="as_json")
+
     benchmark_parser = subparsers.add_parser(
         "benchmark",
         help="Measure local hot paths and summarize recent live turn latency.",
@@ -126,6 +147,10 @@ def main(argv=None) -> None:
     backup_create.add_argument("destination", type=Path)
     backup_restore = backup_sub.add_parser("restore")
     backup_restore.add_argument("source", type=Path)
+    backup_encrypt = backup_sub.add_parser("encrypt")
+    backup_encrypt.add_argument("destination", type=Path)
+    backup_decrypt = backup_sub.add_parser("restore-encrypted")
+    backup_decrypt.add_argument("source", type=Path)
 
     permissions_parser = subparsers.add_parser("permissions")
     permissions_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -234,6 +259,56 @@ def main(argv=None) -> None:
     elif command == "status":
         report = collect_status()
         print(json.dumps(report, indent=2) if args.as_json else render_status(report))
+    elif command == "control-center":
+        from .control_center import ControlCenter
+
+        center = ControlCenter(port=args.port)
+        try:
+            print("Jervis Control Center — private loopback session", flush=True)
+            print("Open this URL on this machine: " + center.url, flush=True)
+            center.serve()
+        except KeyboardInterrupt:
+            print("\nControl Center stopped.")
+        finally:
+            center.close()
+    elif command == "self-heal":
+        from .self_heal import apply_safe_permissions, diagnose
+
+        if args.heal_command in (None, "plan"):
+            findings = diagnose()
+            if getattr(args, "as_json", False):
+                print(json.dumps([asdict(item) for item in findings], indent=2))
+            else:
+                for item in findings:
+                    print("[" + item.severity.upper() + "] "
+                          + item.code + ": " + item.message)
+                    if item.remedy:
+                        print("  Next: " + item.remedy)
+        elif args.heal_command == "apply":
+            import sys
+
+            if not args.yes:
+                if not sys.stdin.isatty():
+                    raise SystemExit("Explicit confirmation required on a terminal.")
+                response = input(
+                    "Create a recovery snapshot and restrict local file permissions? [y/N]: "
+                ).strip().lower()
+                if response not in {"y", "yes"}:
+                    print("No changes made.")
+                    raise SystemExit(1)
+            for result in apply_safe_permissions(consent=True):
+                print("Self-heal: " + result)
+    elif command == "hypercore":
+        from .hypercore import benchmark_fast_path
+
+        result = benchmark_fast_path(iterations=args.iterations)
+        if args.as_json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("HyperCore offline fast path: "
+                  + format(result["median_ms"], ".3f") + " ms median, "
+                  + format(result["p95_ms"], ".3f") + " ms p95")
+            print("These are local-only benchmarks, not cloud voice latency.")
     elif command == "benchmark":
         report = run_benchmark(iterations=args.iterations, history=args.history)
         print(main_json(report) if args.as_json else format_report(report))
@@ -256,9 +331,26 @@ def main(argv=None) -> None:
     elif command == "backup":
         if args.backup_command == "create":
             print(str(create_backup(args.destination)))
-        else:
+        elif args.backup_command == "restore":
             restore_backup(args.source)
             print("Backup restored.")
+        else:
+            import getpass
+            import sys
+            from .encrypted_backup import create_encrypted_backup, restore_encrypted_backup
+
+            if not sys.stdin.isatty():
+                raise SystemExit("Encrypted backups require a local terminal passphrase prompt.")
+            phrase = getpass.getpass("Encrypted backup passphrase: ")
+            if args.backup_command == "encrypt":
+                again = getpass.getpass("Confirm backup passphrase: ")
+                if phrase != again:
+                    raise SystemExit("Passphrases did not match; no backup was created.")
+                result = create_encrypted_backup(args.destination, phrase)
+                print("Encrypted backup exported: " + str(result))
+            else:
+                restored = restore_encrypted_backup(args.source, phrase)
+                print("Authenticated archive restored from snapshot " + restored)
     elif command == "permissions":
         report = audit_permissions()
         print(json.dumps(report, indent=2))
