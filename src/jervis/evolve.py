@@ -20,17 +20,29 @@ class OfflineIntent:
 
 
 def resolve_offline(text: str) -> OfflineIntent | None:
-    command = " ".join(text.lower().strip().split())
-    commands = {
-        "help": OfflineIntent("help", "Try status, help, time, or diagnostics."),
-        "hello": OfflineIntent("greeting", "Hello. Jervis is ready."),
-        "hi": OfflineIntent("greeting", "Hello. Jervis is ready."),
-        "status": OfflineIntent("status", "Run jervis status for detailed system health."),
-        "diagnostics": OfflineIntent("diagnostics", "Run jervis doctor for diagnostics."),
-        "what can you do": OfflineIntent("help", "I can help with status, diagnostics and local commands."),
+    """Recognize enumerated, safe offline intents; never guess an action."""
+    command = " ".join(text.casefold().strip().split()).rstrip("?.!")
+    if len(command) > 128:
+        return None
+    intent_names = {
+        "help": "help", "what can you do": "help", "commands": "help",
+        "hello": "greeting", "hi": "greeting", "hey": "greeting",
+        "hello jervis": "greeting", "good morning": "greeting",
+        "good evening": "greeting",
+        "status": "status", "system status": "status",
+        "diagnostics": "diagnostics", "run diagnostics": "diagnostics",
+        "time": "time", "what time is it": "time", "current time": "time",
+        "what's the time": "time",
     }
-    return commands.get(command)
-
+    canonical = {
+        "help": "Try status, help, time, or diagnostics.",
+        "greeting": "Hello. Jervis is ready.",
+        "status": "Run jervis status for detailed system health.",
+        "diagnostics": "Run jervis doctor for diagnostics.",
+        "time": "Use the local clock for the current time.",
+    }
+    name = intent_names.get(command)
+    return OfflineIntent(name, canonical[name]) if name is not None else None
 
 @dataclass(frozen=True)
 class PluginManifest:
