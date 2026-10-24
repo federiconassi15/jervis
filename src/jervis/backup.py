@@ -38,18 +38,30 @@ def restore_backup(source: Path, *, paths: Paths | None = None) -> None:
     snapshots = resolved.data / "snapshots"
     snapshots.mkdir(mode=0o700, parents=True, exist_ok=True)
     imported = snapshots / (identifier + ".tar.gz")
-    if imported.exists() or imported.is_symlink():
-        raise FileExistsError("An existing recovery snapshot has this ID")
-    with tempfile.NamedTemporaryFile(
-        prefix=".jervis-restore-", dir=snapshots, delete=False
-    ) as staging:
-        staged = Path(staging.name)
-    try:
-        shutil.copy2(source, staged)
-        # Atomic create-no-overwrite semantics, even with a concurrent writer.
-        import os
+    if imported.is_symlink():
+        raise ValueError("Refusing symlinked recovery snapshot")
+    if imported.exists():
+        # Normal same-machine backups still exist in the snapshot directory.
+        # Reuse only an identical, non-symlinked verified archive.
+        import hashlib
 
-        os.link(staged, imported)
-    finally:
-        staged.unlink(missing_ok=True)
+        def digest(path: Path) -> bytes:
+            with path.open("rb") as handle:
+                return hashlib.file_digest(handle, "sha256").digest()
+
+        if digest(imported) != digest(source):
+            raise FileExistsError("Conflicting recovery snapshot with this ID")
+    else:
+        with tempfile.NamedTemporaryFile(
+            prefix=".jervis-restore-", dir=snapshots, delete=False
+        ) as staging:
+            staged = Path(staging.name)
+        try:
+            shutil.copy2(source, staged)
+            # Atomic create-no-overwrite semantics, even with a concurrent writer.
+            import os
+
+            os.link(staged, imported)
+        finally:
+            staged.unlink(missing_ok=True)
     restore_snapshot(identifier, paths=resolved, make_guard=False)
