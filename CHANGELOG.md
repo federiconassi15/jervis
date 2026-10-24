@@ -6,6 +6,20 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 ## Unreleased
 
+## [8.0.1] - 2026-10-24
+
+### Added
+
+- None; this is a maintenance patch.
+
+### Changed
+
+- None beyond the POSIX bootstrap fixes below.
+
+### Removed
+
+- None.
+
 ### Fixed
 
 - POSIX bootstrap uses a private, unpredictable temporary directory for downloads and installer logs, preventing shared-temporary-directory precreation and symlink attacks.

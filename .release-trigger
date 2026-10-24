@@ -1,5 +1,6 @@
-8.0.0
-Implementation merge commit: b541ab9bfbdbfad0c64da6ae3257311da1d9a08a
-Validated feature CI: 39439214426 (12/12 successful)
-Main CI: 39537958478 (started; independent post-merge verification)
-Purpose: publish Jervis 8.0.0 Simple by Default, using plain terminal menus and setup, preserved recovery and runtime, and updated artifact actions.
+8.0.1
+Release purpose: publish the Jervis 8.0.1 POSIX bootstrap cleanup and private-temporary-directory security fixes.
+Validated source commit: 1ce60d70c58258cdd97edee0a09d52666d884932
+Validated CI run: 40071072770 (12/12 jobs successful, 2026-10-24).
+Version sources: src/jervis/version.py and pyproject.toml.
+Release notes: docs/releases/8.0.1.md.

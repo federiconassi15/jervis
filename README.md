@@ -2,7 +2,7 @@
 
 > A lightweight, cross-platform, always-on voice assistant powered by OpenClaw.
 
-Jervis 8.0.0 is a low-latency, continuity-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a plain, command-first terminal menu, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
+Jervis 8.0.1 is a low-latency, continuity-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a plain, command-first terminal menu, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
 ## Install
 
@@ -121,7 +121,7 @@ Jervis identifies from the longer natural command rather than trying to authenti
 
 ## 8.0 — Simple by Default
 
-The default home and installer no longer require Textual, curses, mouse support, terminal-resize handling, or a continuously repainted screen. Setup uses ordinary numbered choices and invokes the existing transactional engine. Guided OpenClaw setup is delegated to `openclaw onboard` rather than embedded in a Jervis TUI. The old Control Deck remains available only through the explicit `jervis legacy-tui` fallback; neither normal entry point launches it. See [8.0.0 release notes](docs/releases/8.0.0.md).
+The default home and installer no longer require Textual, curses, mouse support, terminal-resize handling, or a continuously repainted screen. Setup uses ordinary numbered choices and invokes the existing transactional engine. Guided OpenClaw setup is delegated to `openclaw onboard` rather than embedded in a Jervis TUI. The old Control Deck remains available only through the explicit `jervis legacy-tui` fallback; neither normal entry point launches it. See [8.0.1 release notes](docs/releases/8.0.1.md) for the latest bootstrap security and cleanup fixes; see [8.0.0 release notes](docs/releases/8.0.0.md) for the interface migration.
 
 ## 7.4 “Feels Alive”
 
