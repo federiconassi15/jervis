@@ -68,7 +68,7 @@ def test_voice_router_responds_locally_without_openclaw():
     fake._local = lambda _text, _user: None
     fake.brain = SimpleNamespace(ask=lambda *_args, **_kwargs: (_ for _ in ()).throw(
         AssertionError("Offline command must not reach OpenClaw")))
-    assert "time" in fake.ask("what time is it", "test").route
+    assert fake.ask("what time is it", "test").route == "local:dialogue"
     result = fake.ask("hello", "test")
     assert result.ok and result.route == "local:dialogue"
     assert result.text
