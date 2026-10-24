@@ -1,4 +1,6 @@
-# Installer: Installation Control Deck
+# Installer: Installation Control Deck (historical Jervis 7.x)
+
+**Jervis 8 note:** This page documents the old fullscreen installer, which is no longer the default. See [current installation](getting-started-installation.md) and [installer overview](installer-overview.md) for Jervis 8 numbered terminal prompts.
 
 ## Purpose
 

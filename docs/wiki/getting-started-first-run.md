@@ -1,5 +1,7 @@
 # Getting Started: First Run
 
+**Jervis 8 note:** The first-run installer uses numbered prompts and a final review rather than the historical fullscreen Control Deck. Run `jervis` for the normal menu and `jervis legacy-tui` only when you need the older interface.
+
 ## Purpose
 
 This page documents **First Run** in the **Getting Started** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.

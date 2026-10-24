@@ -1,5 +1,7 @@
 # Getting Started: Control Deck
 
+**Jervis 8 note:** This page describes the historical fullscreen Control Deck. The default `jervis` command now opens a plain terminal menu; use `jervis legacy-tui` to access the old Control Deck intentionally.
+
 ## Purpose
 
 This page documents **Control Deck** in the **Getting Started** subsystem of Jervis 7.1. The public Jervis build is one product across Linux, Windows, and macOS, with Desktop and Server deployment modes sharing the same core runtime and configuration model.

@@ -3,8 +3,12 @@
 ## Core commands
 
     jervis
+    jervis home
     jervis run
     jervis tui
+    jervis legacy-tui
+    jervis status
+    jervis snapshot list
     jervis doctor
     jervis install
     jervis update-check
@@ -12,6 +16,10 @@
     jervis benchmark
     jervis repair audio
     jervis repair openclaw
+
+## Jervis 8 terminal behavior
+
+`jervis` and `jervis home` open the plain terminal menu. `jervis tui` remains a compatibility alias for that menu, while `jervis legacy-tui` explicitly opens the old fullscreen Control Deck on a capable terminal. Without an interactive terminal, the main entry point displays command hints rather than launching a TUI.
 
 ## Runtime information
 
