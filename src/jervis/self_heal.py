@@ -110,6 +110,11 @@ def apply_safe_permissions(*, paths: Paths | None = None, consent: bool = False)
     targets = [paths.config, paths.data,
                paths.config / "config.json", paths.data / "jervis.sqlite3"]
     unsafe = []
+    # Refuse suspicious links on every OS, including platforms where Jervis
+    # cannot safely alter native ACLs.
+    for target in targets:
+        if target.is_symlink():
+            raise ValueError("Refusing to modify symlinked private state")
     if os.name == "nt":
         return ["Windows ACLs are not changed automatically"]
     for target in targets:
