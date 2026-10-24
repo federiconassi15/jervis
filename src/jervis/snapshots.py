@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import platform
 import subprocess
 import shutil
@@ -51,7 +52,7 @@ def create_snapshot(
     resolved = paths or Paths.resolve()
     resolved.ensure()
     stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-    snapshot_id = stamp + "-" + _safe_reason(reason)
+    snapshot_id = stamp + "-" + _safe_reason(reason)[:40] + "-" + secrets.token_hex(3)
     archive = _root(resolved) / (snapshot_id + ".tar.gz")
     metadata = SnapshotInfo(
         id=snapshot_id,
