@@ -90,6 +90,18 @@ def main(argv=None) -> None:
     offline_parser.add_argument("--json", action="store_true", dest="as_json")
     plugins_parser = subparsers.add_parser("plugins", help="List validated plugin manifests")
     plugins_parser.add_argument("--json", action="store_true", dest="as_json")
+    plugins_parser.add_argument("action", nargs="?", choices=("run",))
+    plugins_parser.add_argument("plugin_id", nargs="?")
+    plugins_parser.add_argument("plugin_command", nargs="?")
+
+    companion_parser = subparsers.add_parser(
+        "companion", help="Explicit TLS pairing for read-only companion status"
+    )
+    companion_sub = companion_parser.add_subparsers(dest="companion_command", required=True)
+    companion_serve = companion_sub.add_parser("serve")
+    companion_serve.add_argument("--port", type=int, default=0)
+    companion_serve.add_argument("--lan", action="store_true",
+                                 help="Explicitly bind TLS pairing to all LAN interfaces")
 
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -237,14 +249,42 @@ def main(argv=None) -> None:
         reply = reply_offline(intent, cache=cache, style=args.style)
         print(json.dumps(asdict(reply), indent=2) if args.as_json else reply.text)
     elif command == "plugins":
-        items = render_plugins()
-        if args.as_json:
-            print(json.dumps(items, indent=2))
-        elif not items:
-            print("No validated plugin manifests found.")
+        if args.action == "run":
+            from .plugin_engine import invoke_static_plugin
+
+            if not args.plugin_id or not args.plugin_command:
+                raise SystemExit("Usage: jervis plugins run <plugin-id> <command>")
+            print(invoke_static_plugin(
+                Paths.resolve().data / "plugins", args.plugin_id, args.plugin_command
+            ))
         else:
-            for item in items:
-                print(item["identifier"] + " " + item["version"])
+            items = render_plugins()
+            if args.as_json:
+                print(json.dumps(items, indent=2))
+            elif not items:
+                print("No validated plugin manifests found.")
+            else:
+                for item in items:
+                    print(item["identifier"] + " " + item["version"])
+    elif command == "companion":
+        from .companion import CompanionServer
+
+        hub = CompanionServer(lan=args.lan, port=args.port)
+        try:
+            scope = "LAN enabled (explicit)" if args.lan else "loopback only"
+            print("Jervis Companion — " + scope, flush=True)
+            print("HTTPS port: " + str(hub.port), flush=True)
+            print("TLS SHA-256 fingerprint: " + hub.fingerprint, flush=True)
+            print("Pairing code (valid for 5 minutes): "
+                  + str(hub.registry.code), flush=True)
+            print("Verify the certificate fingerprint before pairing; "
+                  "do not bypass TLS verification.", flush=True)
+            print("Read-only status API: /api/status", flush=True)
+            hub.serve()
+        except KeyboardInterrupt:
+            print("\nCompanion pairing stopped.")
+        finally:
+            hub.close()
     elif command == "runtime-info":
         print(
             json.dumps(
