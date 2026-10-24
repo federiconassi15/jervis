@@ -10,6 +10,8 @@ from typing import Any
 from .agents import AgentHub
 from .brain import OpenClawBrain
 from .skills import SkillManager
+from .evolve import resolve_offline
+from .local_dialogue import DialogueMemory, compose
 
 
 @dataclass(slots=True)
@@ -37,6 +39,7 @@ class BrainRouter:
             ]
         )
         self.skills.discover()
+        self._dialogue_memory = DialogueMemory()
 
     @staticmethod
     def _normalized(text: str) -> str:
@@ -378,6 +381,17 @@ class BrainRouter:
         if local is not None:
             self.state.event("brain_route", "local")
             return RouteReply(True, local, "local")
+
+        # HyperCore: do not contact OpenClaw for strictly enumerated,
+        # non-mutating commands. Retain all existing local action precedence.
+        offline = resolve_offline(text)
+        if offline is not None:
+            style = self.config.get("local_dialogue", {}).get("style", "balanced")
+            if style not in {"balanced", "playful", "focused"}:
+                style = "balanced"
+            answer = compose(offline, memory=self._dialogue_memory, style=style)
+            self.state.event("brain_route", "local:dialogue")
+            return RouteReply(True, answer.text, "local:dialogue")
 
         if self.config.get("_safe_mode", False):
             self.state.event("brain_route", "safe-mode")

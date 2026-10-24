@@ -15,6 +15,7 @@ from .benchmark import (
     main_json,
     run_benchmark,
 )
+from .evolve import health_summary, render_plugins, resolve_offline
 from .diagnostics import create_diagnostics_bundle
 from .doctor import run_doctor
 from .fast import NATIVE_AVAILABLE, backend_name
@@ -75,6 +76,32 @@ def main(argv=None) -> None:
     )
 
     subparsers.add_parser("runtime-info")
+    subparsers.add_parser("health", help="Read-only local recovery and service inventory")
+    offline_parser = subparsers.add_parser("offline", help="Resolve a local command without internet")
+    offline_parser.add_argument("text", nargs="+")
+    offline_parser.add_argument(
+        "--style", choices=("balanced", "playful", "focused"), default="balanced",
+        help="Offline wording style (does not change command interpretation)",
+    )
+    offline_parser.add_argument(
+        "--no-memory", action="store_true",
+        help="Do not read or persist anonymous response variation history",
+    )
+    offline_parser.add_argument("--json", action="store_true", dest="as_json")
+    plugins_parser = subparsers.add_parser("plugins", help="List validated plugin manifests")
+    plugins_parser.add_argument("--json", action="store_true", dest="as_json")
+    plugins_parser.add_argument("action", nargs="?", choices=("run",))
+    plugins_parser.add_argument("plugin_id", nargs="?")
+    plugins_parser.add_argument("plugin_command", nargs="?")
+
+    companion_parser = subparsers.add_parser(
+        "companion", help="Explicit TLS pairing for read-only companion status"
+    )
+    companion_sub = companion_parser.add_subparsers(dest="companion_command", required=True)
+    companion_serve = companion_sub.add_parser("serve")
+    companion_serve.add_argument("--port", type=int, default=0)
+    companion_serve.add_argument("--lan", action="store_true",
+                                 help="Explicitly bind TLS pairing to all LAN interfaces")
 
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -85,6 +112,27 @@ def main(argv=None) -> None:
         choices=("audio", "openclaw", "database", "startup", "models", "permissions", "all"),
     )
     subparsers.add_parser("repair-center")
+
+    center_parser = subparsers.add_parser(
+        "control-center", help="Start the private, read-only local web dashboard"
+    )
+    center_parser.add_argument("--port", type=int, default=0)
+
+    heal_parser = subparsers.add_parser(
+        "self-heal", help="Diagnose and explicitly repair safe local issues"
+    )
+    heal_sub = heal_parser.add_subparsers(dest="heal_command")
+    heal_plan = heal_sub.add_parser("plan")
+    heal_plan.add_argument("--json", action="store_true", dest="as_json")
+    heal_apply = heal_sub.add_parser("apply")
+    heal_apply.add_argument("component", choices=("permissions",))
+    heal_apply.add_argument("--yes", action="store_true")
+
+    perf_parser = subparsers.add_parser(
+        "hypercore", help="Fast-path performance probe and route metrics"
+    )
+    perf_parser.add_argument("--iterations", type=int, default=250)
+    perf_parser.add_argument("--json", action="store_true", dest="as_json")
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -111,6 +159,10 @@ def main(argv=None) -> None:
     backup_create.add_argument("destination", type=Path)
     backup_restore = backup_sub.add_parser("restore")
     backup_restore.add_argument("source", type=Path)
+    backup_encrypt = backup_sub.add_parser("encrypt")
+    backup_encrypt.add_argument("destination", type=Path)
+    backup_decrypt = backup_sub.add_parser("restore-encrypted")
+    backup_decrypt.add_argument("source", type=Path)
 
     permissions_parser = subparsers.add_parser("permissions")
     permissions_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -183,6 +235,56 @@ def main(argv=None) -> None:
         )
         print(json.dumps(asdict(result), indent=2))
         raise SystemExit(0 if result.ok else 1)
+    elif command == "health":
+        print(json.dumps(health_summary(), indent=2))
+    elif command == "offline":
+        intent = resolve_offline(" ".join(args.text))
+        if intent is None:
+            print("Unknown offline command. No action taken.")
+            raise SystemExit(2)
+        # Wording never influences recognized commands or permissions.
+        from .local_dialogue import reply_offline
+
+        cache = None if args.no_memory else Paths.resolve().cache / "offline-dialogue-v1.json"
+        reply = reply_offline(intent, cache=cache, style=args.style)
+        print(json.dumps(asdict(reply), indent=2) if args.as_json else reply.text)
+    elif command == "plugins":
+        if args.action == "run":
+            from .plugin_engine import invoke_static_plugin
+
+            if not args.plugin_id or not args.plugin_command:
+                raise SystemExit("Usage: jervis plugins run <plugin-id> <command>")
+            print(invoke_static_plugin(
+                Paths.resolve().data / "plugins", args.plugin_id, args.plugin_command
+            ))
+        else:
+            items = render_plugins()
+            if args.as_json:
+                print(json.dumps(items, indent=2))
+            elif not items:
+                print("No validated plugin manifests found.")
+            else:
+                for item in items:
+                    print(item["identifier"] + " " + item["version"])
+    elif command == "companion":
+        from .companion import CompanionServer
+
+        hub = CompanionServer(lan=args.lan, port=args.port)
+        try:
+            scope = "LAN enabled (explicit)" if args.lan else "loopback only"
+            print("Jervis Companion — " + scope, flush=True)
+            print("HTTPS port: " + str(hub.port), flush=True)
+            print("TLS SHA-256 fingerprint: " + hub.fingerprint, flush=True)
+            print("Pairing code (valid for 5 minutes): "
+                  + str(hub.registry.code), flush=True)
+            print("Verify the certificate fingerprint before pairing; "
+                  "do not bypass TLS verification.", flush=True)
+            print("Read-only status API: /api/status", flush=True)
+            hub.serve()
+        except KeyboardInterrupt:
+            print("\nCompanion pairing stopped.")
+        finally:
+            hub.close()
     elif command == "runtime-info":
         print(
             json.dumps(
@@ -197,6 +299,56 @@ def main(argv=None) -> None:
     elif command == "status":
         report = collect_status()
         print(json.dumps(report, indent=2) if args.as_json else render_status(report))
+    elif command == "control-center":
+        from .control_center import ControlCenter
+
+        center = ControlCenter(port=args.port)
+        try:
+            print("Jervis Control Center — private loopback session", flush=True)
+            print("Open this URL on this machine: " + center.url, flush=True)
+            center.serve()
+        except KeyboardInterrupt:
+            print("\nControl Center stopped.")
+        finally:
+            center.close()
+    elif command == "self-heal":
+        from .self_heal import apply_safe_permissions, diagnose
+
+        if args.heal_command in (None, "plan"):
+            findings = diagnose()
+            if getattr(args, "as_json", False):
+                print(json.dumps([asdict(item) for item in findings], indent=2))
+            else:
+                for item in findings:
+                    print("[" + item.severity.upper() + "] "
+                          + item.code + ": " + item.message)
+                    if item.remedy:
+                        print("  Next: " + item.remedy)
+        elif args.heal_command == "apply":
+            import sys
+
+            if not args.yes:
+                if not sys.stdin.isatty():
+                    raise SystemExit("Explicit confirmation required on a terminal.")
+                response = input(
+                    "Create a recovery snapshot and restrict local file permissions? [y/N]: "
+                ).strip().lower()
+                if response not in {"y", "yes"}:
+                    print("No changes made.")
+                    raise SystemExit(1)
+            for result in apply_safe_permissions(consent=True):
+                print("Self-heal: " + result)
+    elif command == "hypercore":
+        from .hypercore import benchmark_fast_path
+
+        result = benchmark_fast_path(iterations=args.iterations)
+        if args.as_json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("HyperCore offline fast path: "
+                  + format(result["median_ms"], ".3f") + " ms median, "
+                  + format(result["p95_ms"], ".3f") + " ms p95")
+            print("These are local-only benchmarks, not cloud voice latency.")
     elif command == "benchmark":
         report = run_benchmark(iterations=args.iterations, history=args.history)
         print(main_json(report) if args.as_json else format_report(report))
@@ -219,9 +371,26 @@ def main(argv=None) -> None:
     elif command == "backup":
         if args.backup_command == "create":
             print(str(create_backup(args.destination)))
-        else:
+        elif args.backup_command == "restore":
             restore_backup(args.source)
             print("Backup restored.")
+        else:
+            import getpass
+            import sys
+            from .encrypted_backup import create_encrypted_backup, restore_encrypted_backup
+
+            if not sys.stdin.isatty():
+                raise SystemExit("Encrypted backups require a local terminal passphrase prompt.")
+            phrase = getpass.getpass("Encrypted backup passphrase: ")
+            if args.backup_command == "encrypt":
+                again = getpass.getpass("Confirm backup passphrase: ")
+                if phrase != again:
+                    raise SystemExit("Passphrases did not match; no backup was created.")
+                result = create_encrypted_backup(args.destination, phrase)
+                print("Encrypted backup exported: " + str(result))
+            else:
+                restored = restore_encrypted_backup(args.source, phrase)
+                print("Authenticated archive restored from snapshot " + restored)
     elif command == "permissions":
         report = audit_permissions()
         print(json.dumps(report, indent=2))

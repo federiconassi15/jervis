@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import platform
 import subprocess
 import shutil
@@ -30,7 +31,9 @@ class SnapshotInfo:
 
 def _root(paths: Paths) -> Path:
     root = paths.data / "snapshots"
-    root.mkdir(parents=True, exist_ok=True)
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name != "nt":
+        root.chmod(0o700)
     return root
 
 
@@ -49,7 +52,7 @@ def create_snapshot(
     resolved = paths or Paths.resolve()
     resolved.ensure()
     stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-    snapshot_id = stamp + "-" + _safe_reason(reason)
+    snapshot_id = stamp + "-" + _safe_reason(reason)[:40] + "-" + secrets.token_hex(3)
     archive = _root(resolved) / (snapshot_id + ".tar.gz")
     metadata = SnapshotInfo(
         id=snapshot_id,
@@ -101,9 +104,13 @@ def create_snapshot(
                 target.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(binary, target / binary.name)
 
-        with tarfile.open(archive, "w:gz") as bundle:
-            for item in staging.iterdir():
-                bundle.add(item, arcname=item.name)
+        # O_EXCL avoids clobbering snapshots with the same second-level ID,
+        # and mode 0600 keeps private state out of shared-user archive access.
+        fd = os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            with tarfile.open(fileobj=handle, mode="w:gz") as bundle:
+                for item in staging.iterdir():
+                    bundle.add(item, arcname=item.name)
 
     prune_snapshots(paths=resolved)
     return metadata

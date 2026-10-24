@@ -6,6 +6,33 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 ## Unreleased
 
+### Added
+
+- An explicit, authenticated loopback-only read-only Control Center prototype.
+- Adaptive local responses and safe offline clock/greeting/help/diagnostics routing for the CLI and voice fast path.
+- Read-only self-healing checks, guarded POSIX permissions repair, and verified recovery archive counting.
+- TLS-protected one-time companion pairing with ephemeral read-only status tokens and deliberate LAN opt-in.
+- AES-256-GCM authenticated encrypted backup exports and restoration with local passphrase prompts.
+- Declarative plugin commands that do not execute arbitrary code.
+- Bounded local route latency measurement and a HyperCore benchmark probe.
+- Detailed draft 8.1 wiki guide with limitations and release gates.
+
+### Changed
+
+- The 8.1 development branch includes the stable 8.0.1 release baseline.
+- Encrypted backup dependency: cryptography 50.0.2 through the compatible 50.x series.
+- Snapshot archives are private and created with collision-resistant identifiers.
+
+### Removed
+
+- None; Jervis 8.0 entry points remain available.
+
+### Fixed
+
+- Health inventory no longer treats corrupt snapshot filenames as valid recoverable backups.
+- Encrypted backup files cannot overwrite an existing destination, including if the destination appears during export.
+- Unknown offline commands cannot accidentally trigger external or destructive actions.
+
 ## [8.0.1] - 2026-10-24
 
 ### Added

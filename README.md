@@ -4,6 +4,12 @@
 
 Jervis 8.0.1 is a low-latency, continuity-aware local voice shell for Linux, Windows, and macOS. It combines wake-word handling, trusted conversation sessions, local identity/state, a plain, command-first terminal menu, optional Android-phone microphone input, and an OpenClaw agentic brain. Native releases use a Rust-accelerated audio/VAD hot path while retaining a portable NumPy fallback for source installs.
 
+## In development: Jervis 8.1 — Evolve
+
+The [draft 8.1 PR](https://github.com/federiconassi15/jervis/pull/3) includes adaptive offline dialogue, private Control Center, bounded self-heal checks, local performance probes, encrypted backup exports, declarative plugin commands, and read-only TLS companion pairing. These additions are **not included in the 8.0.1 stable installer**. Voice hardware integration, remote companion capabilities, and other security/acceptance gates still require work.
+
+See the [8.1 wiki preview](docs/wiki/evolve-index.md) and [release gates](docs/wiki/evolve-security-and-testing.md). Do not install a draft source build over important existing state without an independent backup.
+
 ## Install
 
 ### Fresh machine — recommended
