@@ -76,8 +76,10 @@ def encrypt_file(source: Path, destination: Path, passphrase: str) -> Path:
             os.fsync(output.fileno())
         if dst.exists() or dst.is_symlink():
             raise FileExistsError("Target appeared while writing backup")
-        # Atomic replace is safe here only after verifying destination absence.
-        os.replace(temp, dst)
+        # Atomic link fails without altering any pre-existing destination,
+        # unlike os.replace which could race with another writer.
+        os.link(temp, dst)
+        temp.unlink()
         temp = None
         return dst
     finally:

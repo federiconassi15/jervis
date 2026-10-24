@@ -39,7 +39,7 @@ def _verify_cached(path: str, size: int, mtime_ns: int) -> bool:
                 if index >= _MAX_MEMBERS:
                     return False
                 parsed = PurePosixPath(entry.name)
-                if (entry.name.startswith("/") or ".." in parsed.parts
+                if (entry.name.startswith("/") or "\\" in entry.name or ".." in parsed.parts
                         or not (entry.isdir() or entry.isfile())
                         or entry.name in seen):
                     return False
