@@ -27,11 +27,11 @@ The setup path covers:
 5. final review
 6. install + verification
 
-## 7.3.1 presentation
+## Jervis 8.0.1 presentation
 
-The 7.3.1 hardening line introduces the Unicode-framed **Installation Control Deck** and terminal-native sound cues. This changes presentation/observability, not the transaction model.
+The default installer is a simple terminal wizard with numbered prompts, cancellation, masked passphrase entry and final review. Guided OpenClaw onboarding is delegated to the upstream CLI after core installation.
 
-Cues use host terminal/console mechanisms only and require no media assets.
+The 8.0.1 Linux/macOS bootstrap uses private, unpredictable temporary paths and cleans downloaded payloads, checksums and logs on installer exit. The historic Unicode-framed Installation Control Deck is not the default in Jervis 8.
 
 ## Platform behavior
 

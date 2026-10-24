@@ -1,54 +1,43 @@
 # Development: Release Checklist
 
-## Scope
+## Jervis 8.0 maintenance gate
 
-This page is the Jervis 7.1 reference for **Release Checklist** within **Development**. Jervis is designed as one cross-platform assistant rather than three loosely related ports, so feature behavior is defined by the shared core and translated to each host only where the operating system genuinely differs.
+A patch release should change only the patch component of the current version, preserve existing state/configuration semantics, and have a changelog and matching `docs/releases/<version>.md` derived from its code diff.
 
-## Expected behavior
+## Before publishing
 
-Release Checklist should preserve the Jervis reliability contract: local voice, state, and diagnostics remain available even if the OpenClaw brain, network, model provider, or an optional skill is unavailable. Errors should be visible and recoverable rather than silently wedging the runtime.
+1. Confirm `src/jervis/version.py` and `pyproject.toml` agree.
+2. Run focused regression tests for changes and review failures.
+3. Verify Linux, Windows, and macOS CI, including native smoke tests and Rust acceleration in frozen builds.
+4. Verify Linux x64/ARM64, Windows x64 and macOS Intel/Apple Silicon output asset names.
+5. Review installer checksums, temporary-file handling, cleanup, rollback, update and start-up behavior.
+6. Review risk to credentials, identity and session boundaries; never publish private state.
+7. Preserve release note headings: **Added**, **Changed**, **Removed**, **Fixed**.
+8. Trigger `Release` through a changed `.release-trigger` on `main` only when ready.
+9. Confirm published GitHub tag, five native assets, source archives, all-platforms ZIP and `SHA256SUMS`.
+10. Confirm `Sync GitHub Wiki` succeeded and current installation/versioning guidance is visible.
 
-Trusted conversation sessions are central to 7.1. A user who has already been confidently recognized or authenticated should remain associated with the conversation while activity continues. Speaker confidence can reinforce the session, but an isolated weak sample does not force immediate reauthentication.
+## Failure handling
 
-## Platform parity
+An unverified release or missing checksum is a blocker, not an invitation to guess. Never automatically merge feature PRs, cross a major/minor version boundary, or ship an unverified dependency jump.
 
-Linux, Windows, and macOS use the same configuration schema and identity/state model. Host differences are limited to service startup, audio-host APIs, paths, and prerequisite installation. Android AudioSource input is transported by ADB forwarding and feeds the same capture abstraction.
+## Runtime reliability
 
-## Server and Desktop
+Jervis must remain diagnosable when OpenClaw or a provider is down. Preserve `jervis doctor`, managed startup, snapshots and rollback, Desktop/Server consistency, and cross-platform permissions.
 
-Desktop mode is optimized for the user's normal speakers, microphone, login session, and changing peripherals. Server mode is optimized for persistent startup and explicit hardware. Both modes expose the same Jervis commands, identity logic, OpenClaw routing, Control Deck concepts, and update policy.
+## Useful commands
 
-## Maintenance
-
-Jervis automated maintenance stays on the current major/minor line. A 7.1.x build may move to a newer 7.1.x patch after validation, but automation must not turn it into 7.2 or 8. External dependency changes should be adapted and tested before pins are updated.
-
-## Security and privacy
-
-Speaker recognition is not strong biometric authentication. Sensitive actions should require appropriate permission and, when necessary, explicit authentication. Logs and examples must not contain API keys, passphrases, voiceprints, private transcripts, device serials, or personal machine details.
-
-## Resource expectations
-
-Jervis targets modest always-on hardware as well as modern desktops. Avoid repeated subprocess launches, hot polling, unbounded history, or eagerly loading expensive speech models. The idle path should remain boring and cheap.
-
-## Diagnostics
-
-Use this order when investigating Release Checklist:
-
-1. `jervis doctor`
-2. Control Deck status and timeline
-3. Active Jervis configuration
-4. OS service/startup state
-5. Audio device state when relevant
-6. `openclaw doctor` for brain/provider problems
-7. Sanitized logs and a minimal reproduction
-
-## Contribution expectations
-
-A change touching Release Checklist should include a focused test where practical, at least one failure-case check, and documentation for any changed user-visible behavior. Cross-platform branches should be explicit and small rather than scattering OS checks across core logic.
+```text
+jervis doctor
+jervis runtime-info
+jervis acceptance-test
+jervis snapshot list
+jervis update-check
+```
 
 ## Related pages
 
 - [Development index](development-index.md)
+- [Release Workflow](development-release-workflow.md)
+- [Versioning](development-versioning.md)
 - [Wiki Home](Home.md)
-- [Previous](development-security-review.md)
-- [Next](development-index.md)

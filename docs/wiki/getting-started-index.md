@@ -1,6 +1,6 @@
 # Getting Started
 
-Current documentation for Jervis **7.3** and the **7.3.1 hardening line**.
+Entry points for **Jervis 8.0.1**. The main menu and installer use plain terminal prompts; specialist Jervis 7.x pages are retained as historical references.
 
 - [Overview](getting-started-overview.md)
 - [Requirements](getting-started-requirements.md)
@@ -23,6 +23,6 @@ Current documentation for Jervis **7.3** and the **7.3.1 hardening line**.
 - [Security Basics](getting-started-security-basics.md)
 - [Troubleshooting](getting-started-troubleshooting.md)
 
-For current performance/hardening work, also see [CLI / benchmark](reference-cli.md) and the [Installer](installer-index.md).
+For current commands and setup behavior, see [CLI Reference](reference-cli.md) and [Installer](installer-index.md).
 
 [Back to Wiki Home](Home.md)

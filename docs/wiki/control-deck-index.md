@@ -1,6 +1,6 @@
 # Control Deck
 
-Detailed Jervis 7.1 documentation for **Control Deck**.
+Historical Control Deck documentation from Jervis 7.x. In Jervis 8, `jervis` and `jervis tui` open the plain terminal menu. Use `jervis legacy-tui` to access this older fullscreen Control Deck on supported terminals.
 
 - [Overview](control-deck-overview.md)
 - [Navigation](control-deck-navigation.md)

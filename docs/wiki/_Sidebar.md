@@ -20,11 +20,17 @@
 - [Troubleshooting](troubleshooting-index.md)
 - [Reference](reference-index.md)
 
-## 7.3 hardening
+## Jervis 8.0
 
-- [Installation Control Deck](installer-blue-ui.md)
+- [Install / upgrade](getting-started-installation.md)
+- [CLI commands](reference-cli.md)
+- [Versioning](development-versioning.md)
+- [Release workflow](development-release-workflow.md)
+
+## Historical Jervis 7 interface
+
+- [Old Installation Control Deck](installer-blue-ui.md)
 - [Terminal cues](installer-banter.md)
-- [CLI / benchmark](reference-cli.md)
 
 ## Canonical docs
 

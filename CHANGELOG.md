@@ -4,6 +4,27 @@ All notable public changes to Jervis are documented here.
 
 Release descriptions are derived from actual code diffs and mirrored in `docs/releases/`.
 
+## Unreleased
+
+## [8.0.1] - 2026-10-24
+
+### Added
+
+- None; this is a maintenance patch.
+
+### Changed
+
+- None beyond the POSIX bootstrap fixes below.
+
+### Removed
+
+- None.
+
+### Fixed
+
+- POSIX bootstrap uses a private, unpredictable temporary directory for downloads and installer logs, preventing shared-temporary-directory precreation and symlink attacks.
+- POSIX bootstrap removes its temporary native payload and checksum after the installer exits, including failed exits, while preserving the native exit status.
+
 ## [8.0.0] - 2026-10-21
 
 ### Added

@@ -1,6 +1,6 @@
 # Getting Started: Updates
 
-Jervis 7.3.5 can update official native builds on the current 7.3 patch line without skipping directly to a new minor/major release.
+Jervis 8.0.x can install validated patch updates on the installed 8.0 line. Upgrading from an older 7.x line to 8.x is a separate compatibility decision, not an automatic patch update.
 
 ## Check
 
@@ -40,6 +40,6 @@ Automatic binary replacement targets official frozen Jervis releases. Source/dev
 
 ## Version boundary
 
-Automated maintenance stays on the current major/minor line. A 7.3.x build can move to another validated 7.3.x patch; it does not automatically become 7.4 or 8.x.
+Automated maintenance stays on the current major/minor line. An 8.0.x build can move to another validated 8.0.x patch; it does not automatically become 8.1 or 9.x. Earlier 7.x installations stay on their own release line unless deliberately migrated.
 
 [Back to Getting Started](getting-started-index.md)

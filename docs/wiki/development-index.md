@@ -1,6 +1,6 @@
 # Development
 
-Development documentation for the current **Jervis 7.3** codebase.
+Development entry points for **Jervis 8.0.1**. Many historical subsystem pages document the 7.x implementation; see current release, versioning and installer pages for updated defaults.
 
 - [Overview](development-overview.md)
 - [Repo Layout](development-repo-layout.md)
@@ -23,6 +23,6 @@ Development documentation for the current **Jervis 7.3** codebase.
 - [Security Review](development-security-review.md)
 - [Release Checklist](development-release-checklist.md)
 
-The 7.3.x hardening line accepts bug fixes, observability, compatibility work, and measured latency improvements. Larger experience features belong in 7.4.
+The 8.0.x maintenance line accepts verified patch fixes. Jervis 8.1 features require separate scope and release approval.
 
 [Back to Wiki Home](Home.md)
