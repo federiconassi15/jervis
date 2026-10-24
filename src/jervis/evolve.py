@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .paths import Paths
+from .recovery_verify import verify_snapshot_archive
 
 
 @dataclass(frozen=True)
@@ -87,11 +88,14 @@ def health_summary(paths: Paths | None = None) -> dict:
     paths = paths or Paths.resolve()
     config = paths.config / "config.json"
     db = paths.data / "jervis.sqlite3"
+    archives = sorted((paths.data / "snapshots").glob("*.tar.gz"))
+    verified = sum(verify_snapshot_archive(path) for path in archives)
     return {
         "config_present": config.is_file(),
         "database_present": db.is_file(),
         "plugins_discovered": len(discover_plugins(paths.data / "plugins")),
-        "recovery_snapshots": len(list((paths.data / "snapshots").glob("*.tar.gz"))) if (paths.data / "snapshots").exists() else 0,
+        "recovery_snapshots": verified,
+        "invalid_snapshots": len(archives) - verified,
     }
 
 
