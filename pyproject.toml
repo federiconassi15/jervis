@@ -12,6 +12,7 @@ license = {text = "GPL-3.0-or-later"}
 authors = [{name = "Federico Nassi"}]
 dependencies = [
   "numpy>=1.26,<3",
+  "cryptography>=50.0.2,<51",
   "platformdirs>=4.3,<5",
   "psutil>=6,<8",
   "sounddevice>=0.5,<1",
