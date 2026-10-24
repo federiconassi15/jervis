@@ -29,15 +29,27 @@ def restore_backup(source: Path, *, paths: Paths | None = None) -> None:
     if not source.exists():
         raise FileNotFoundError(str(source))
 
+    # Validate all archive members before creating a restore guard or changing
+    # any files. This also rejects malicious snapshot IDs and traversal.
+    from .encrypted_backup import _verify_restorable_archive
+
+    identifier = _verify_restorable_archive(source)
     create_snapshot("pre-backup-restore", paths=resolved, include_binary=False)
     snapshots = resolved.data / "snapshots"
-    snapshots.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(source, "r:gz") as bundle:
-        raw = bundle.extractfile("snapshot.json")
-        if raw is None:
-            raise RuntimeError("backup is missing snapshot metadata")
-        metadata = json.loads(raw.read().decode("utf-8"))
+    snapshots.mkdir(mode=0o700, parents=True, exist_ok=True)
+    imported = snapshots / (identifier + ".tar.gz")
+    if imported.exists() or imported.is_symlink():
+        raise FileExistsError("An existing recovery snapshot has this ID")
+    with tempfile.NamedTemporaryFile(
+        prefix=".jervis-restore-", dir=snapshots, delete=False
+    ) as staging:
+        staged = Path(staging.name)
+    try:
+        shutil.copy2(source, staged)
+        # Atomic create-no-overwrite semantics, even with a concurrent writer.
+        import os
 
-    imported = snapshots / (str(metadata["id"]) + ".tar.gz")
-    shutil.copy2(source, imported)
-    restore_snapshot(str(metadata["id"]), paths=resolved, make_guard=False)
+        os.link(staged, imported)
+    finally:
+        staged.unlink(missing_ok=True)
+    restore_snapshot(identifier, paths=resolved, make_guard=False)
