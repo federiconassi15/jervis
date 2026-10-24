@@ -79,6 +79,15 @@ def main(argv=None) -> None:
     subparsers.add_parser("health", help="Read-only local recovery and service inventory")
     offline_parser = subparsers.add_parser("offline", help="Resolve a local command without internet")
     offline_parser.add_argument("text", nargs="+")
+    offline_parser.add_argument(
+        "--style", choices=("balanced", "playful", "focused"), default="balanced",
+        help="Offline wording style (does not change command interpretation)",
+    )
+    offline_parser.add_argument(
+        "--no-memory", action="store_true",
+        help="Do not read or persist anonymous response variation history",
+    )
+    offline_parser.add_argument("--json", action="store_true", dest="as_json")
     plugins_parser = subparsers.add_parser("plugins", help="List validated plugin manifests")
     plugins_parser.add_argument("--json", action="store_true", dest="as_json")
 
@@ -196,7 +205,12 @@ def main(argv=None) -> None:
         if intent is None:
             print("Unknown offline command. No action taken.")
             raise SystemExit(2)
-        print(intent.response)
+        # Wording never influences recognized commands or permissions.
+        from .local_dialogue import reply_offline
+
+        cache = None if args.no_memory else Paths.resolve().cache / "offline-dialogue-v1.json"
+        reply = reply_offline(intent, cache=cache, style=args.style)
+        print(json.dumps(asdict(reply), indent=2) if args.as_json else reply.text)
     elif command == "plugins":
         items = render_plugins()
         if args.as_json:
