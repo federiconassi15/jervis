@@ -218,13 +218,28 @@ def restore_encrypted_backup(source: Path, passphrase: str,
         snapshots = resolved.data / "snapshots"
         snapshots.mkdir(mode=0o700, parents=True, exist_ok=True)
         destination = snapshots / (identifier + ".tar.gz")
-        if destination.exists() or destination.is_symlink():
-            raise FileExistsError("Snapshot with the same ID already exists")
+        # The exclusive open is the *publication* operation. A separate
+        # exists()/copy2() check races with legitimate concurrent restorers.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(destination, flags, 0o600)
+        owned_identity = os.fstat(fd)
         try:
-            # The imported plaintext is removed even when restore fails.
-            shutil.copy2(decrypted, destination)
+            with os.fdopen(fd, "wb") as target, decrypted.open("rb") as plain:
+                shutil.copyfileobj(plain, target, _CHUNK)
+                target.flush()
+                os.fsync(target.fileno())
             restore_snapshot(identifier, paths=resolved, make_guard=True,
                              restore_binary=False)
             return identifier
         finally:
-            destination.unlink(missing_ok=True)
+            # Never unlink a different snapshot that appeared at this name
+            # after our restore, including during an exception or rollback.
+            try:
+                current = destination.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                if (not destination.is_symlink()
+                        and current.st_dev == owned_identity.st_dev
+                        and current.st_ino == owned_identity.st_ino):
+                    destination.unlink(missing_ok=True)

@@ -76,3 +76,61 @@ def test_invalid_plain_backup_id_rejected_without_state_changes(tmp_path):
         restore_backup(path, paths=p)
     assert (p.data / "important.txt").read_text() == "do not touch"
     assert not list((p.data / "snapshots").glob("*.tar.gz"))
+
+
+
+def test_encrypted_restore_exclusive_import_race(tmp_path, monkeypatch):
+    """A competing snapshot published during import is never overwritten."""
+    from pathlib import Path
+
+    import jervis.encrypted_backup as module
+
+    p = _paths(tmp_path)
+    (p.data / "important.txt").write_text("original")
+    encrypted = tmp_path / "export.jenc"
+    create_encrypted_backup(encrypted, "strong-enough backup phrase", paths=p)
+    with __import__("tempfile").TemporaryDirectory() as staging:
+        plain = module.decrypt_file(encrypted, Path(staging) / "plain.tar.gz",
+                                    "strong-enough backup phrase")
+        identifier = module._verify_restorable_archive(plain)
+    dest = p.data / "snapshots" / (identifier + ".tar.gz")
+    original_open = module.os.open
+
+    def racing_open(path, flags, *args, **kwargs):
+        if Path(path) == dest:
+            dest.write_bytes(b"another writer's snapshot")
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(module.os, "open", racing_open)
+    with pytest.raises(FileExistsError):
+        restore_encrypted_backup(encrypted, "strong-enough backup phrase", paths=p)
+    assert dest.read_bytes() == b"another writer's snapshot"
+    assert (p.data / "important.txt").read_text() == "original"
+
+
+def test_encrypted_restore_does_not_unlink_replaced_import(tmp_path, monkeypatch):
+    """Cleanup must not remove a new owner of a previously imported pathname."""
+    from pathlib import Path
+
+    import jervis.encrypted_backup as module
+    import jervis.snapshots as snapshots
+
+    p = _paths(tmp_path)
+    (p.data / "important.txt").write_text("original")
+    encrypted = tmp_path / "export.jenc"
+    create_encrypted_backup(encrypted, "strong-enough backup phrase", paths=p)
+    with __import__("tempfile").TemporaryDirectory() as staging:
+        plain = module.decrypt_file(encrypted, Path(staging) / "plain.tar.gz",
+                                    "strong-enough backup phrase")
+        identifier = module._verify_restorable_archive(plain)
+    dest = p.data / "snapshots" / (identifier + ".tar.gz")
+
+    def replacement(*args, **kwargs):
+        dest.unlink()
+        dest.write_bytes(b"other owner")
+        raise RuntimeError("Simulated racing restorer")
+
+    monkeypatch.setattr(snapshots, "restore_snapshot", replacement)
+    with pytest.raises(RuntimeError, match="racing"):
+        restore_encrypted_backup(encrypted, "strong-enough backup phrase", paths=p)
+    assert dest.read_bytes() == b"other owner"

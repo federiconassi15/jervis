@@ -29,6 +29,8 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 ### Fixed
 
+- Encrypted restore imports now claim snapshot paths exclusively and avoid deleting
+  a different snapshot that replaced the imported file during recovery.
 - Health inventory no longer treats corrupt snapshot filenames as valid recoverable backups.
 - Encrypted backup files cannot overwrite an existing destination, including if the destination appears during export.
 - Unknown offline commands cannot accidentally trigger external or destructive actions.
