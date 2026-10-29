@@ -46,3 +46,5 @@ write-capable features or a release. Existing local snapshots are not encrypted.
 
 - Opt-in local SQLite FTS5 Knowledge Vault with incremental index/search tests.
 - Read-only authenticated Control Center operational event endpoint and UI section.
+
+- Durable, capability-checked single-host Mission Control queue foundation; no external execution yet.
