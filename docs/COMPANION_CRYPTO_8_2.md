@@ -32,3 +32,5 @@ message delivery/ack protocol and a full security review are **still required**.
 No private signing key, shared secret or PII belongs in source, logs or Git.
 
 The native Android Kotlin implementation now includes the same P-256/HKDF/AES-GCM protocol with a deterministic cross-language test vector. This does not yet connect Android networking, key-store persistence or pairing UX.
+
+Transport adapters now wrap authenticated channel envelopes in the relay's opaque v1 five-field format; unpacking checks the outer and inner sequence IDs, while decryption still authenticates everything. Kotlin tests use the official JVM org.json test dependency; Android already includes org.json at runtime.
