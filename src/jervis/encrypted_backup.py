@@ -222,12 +222,13 @@ def restore_encrypted_backup(source: Path, passphrase: str,
         # exists()/copy2() check races with legitimate concurrent restorers.
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(destination, flags, 0o600)
-        owned_identity = os.fstat(fd)
+        owned_identity = None
         try:
             with os.fdopen(fd, "wb") as target, decrypted.open("rb") as plain:
                 shutil.copyfileobj(plain, target, _CHUNK)
                 target.flush()
                 os.fsync(target.fileno())
+                owned_identity = os.fstat(target.fileno())
             restore_snapshot(identifier, paths=resolved, make_guard=True,
                              restore_binary=False)
             return identifier
@@ -239,7 +240,10 @@ def restore_encrypted_backup(source: Path, passphrase: str,
             except FileNotFoundError:
                 pass
             else:
-                if (not destination.is_symlink()
+                if (owned_identity is not None
+                        and not destination.is_symlink()
                         and current.st_dev == owned_identity.st_dev
-                        and current.st_ino == owned_identity.st_ino):
+                        and current.st_ino == owned_identity.st_ino
+                        and current.st_ctime_ns == owned_identity.st_ctime_ns
+                        and current.st_size == owned_identity.st_size):
                     destination.unlink(missing_ok=True)
