@@ -762,25 +762,34 @@ class Runtime:
                     until = time.monotonic() + self.config["speech"]["follow_up_seconds"]
 
 
+    def _operational_event(self, code: str) -> None:
+        # Disk errors in optional telemetry cannot bring down always-on voice.
+        journal = self.operational_log
+        if journal is None:
+            return
+        try:
+            journal.emit(code)
+        except OSError:
+            try:
+                journal.close()
+            finally:
+                self.operational_log = None
+
     def run(self) -> None:
         begin_runtime(self.paths)
         try:
-            if self.operational_log:
-                self.operational_log.emit("runtime.started")
+            self._operational_event("runtime.started")
             self._run_loop()
         except KeyboardInterrupt:
-            if self.operational_log:
-                self.operational_log.emit("runtime.stopped")
+            self._operational_event("runtime.stopped")
             end_runtime(self.paths)
             raise
         except BaseException:
-            if self.operational_log:
-                self.operational_log.emit("runtime.crashed")
+            self._operational_event("runtime.crashed")
             # Leave the session marker unclean so the next start detects a crash.
             raise
         else:
-            if self.operational_log:
-                self.operational_log.emit("runtime.stopped")
+            self._operational_event("runtime.stopped")
             end_runtime(self.paths)
         finally:
             if self.operational_log:

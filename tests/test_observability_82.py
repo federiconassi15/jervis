@@ -63,3 +63,27 @@ def test_symlinked_log_directory_is_rejected(tmp_path):
         EventJournal(link)
     with pytest.raises(PermissionError):
         read_events(link)
+
+
+
+def test_untrusted_log_fields_do_not_expose_private_text(tmp_path):
+    journal = EventJournal(tmp_path)
+    journal.close()
+    with (tmp_path / "events.jsonl").open("a") as output:
+        output.write(json.dumps({
+            "code": "runtime.started", "level": "MADEUP",
+            "component": "private-path", "message": "secret",
+            "id": "my private credentials", "time": "private timestamp",
+            "correlation_id": "secret-device-id",
+            "metrics": {"duration_ms": float("nan"), "count": 5,
+                        "password": "private"},
+        }) + "\n")
+    events = read_events(tmp_path, level="ERROR")
+    assert events == []
+    row = read_events(tmp_path)[-1]
+    assert row["level"] == "INFO"
+    assert row["component"] == "runtime"
+    assert row["message"] == "Jervis runtime started"
+    assert row["id"] is None and row["correlation_id"] is None
+    assert row["time"] == ""
+    assert row["metrics"] == {"count": 5}

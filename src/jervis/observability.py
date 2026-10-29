@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import stat
@@ -96,7 +97,7 @@ class EventJournal:
         for key, value in (metrics or {}).items():
             if key not in _METRIC_FIELDS or type(value) not in (int, float):
                 raise ValueError("Only approved numeric metrics may be logged")
-            if not -1e12 < value < 1e12:
+            if not math.isfinite(value) or not 0 <= value < 1e12:
                 raise ValueError("Metric outside safe range")
             fields[key] = value
         level, component, message, action = CATALOG[code]
@@ -146,21 +147,39 @@ def read_events(directory: Path, *, level: str | None = None,
                     continue
                 if not isinstance(row, dict) or row.get("code") not in CATALOG:
                     continue
-                if level and _SEVERITY[row.get("level", "")] < _SEVERITY[level]:
-                    continue
-                if component and row.get("component") != component:
-                    continue
-                # Never print arbitrary on-disk text, even if the file was edited.
+                # Never trust free-form fields in an on-disk journal, even if
+                # someone modified a record after it was written.
                 canonical = CATALOG[row["code"]]
-                row["level"], row["component"], row["message"] = canonical[:3]
-                row["metrics"] = {
-                    k: v for k, v in (row.get("metrics") or {}).items()
+                severity, source, message = canonical[:3]
+                if level and _SEVERITY[severity] < _SEVERITY[level]:
+                    continue
+                if component and source != component:
+                    continue
+                untrusted_metrics = row.get("metrics")
+                metrics = ({
+                    k: v for k, v in untrusted_metrics.items()
                     if k in _METRIC_FIELDS and type(v) in (int, float)
-                } if isinstance(row.get("metrics"), dict) else {}
-                rows.append({k: row.get(k) for k in (
-                    "id", "time", "level", "component", "code", "message",
-                    "correlation_id", "metrics"
-                )})
+                    and math.isfinite(v) and 0 <= v < 1e12
+                } if isinstance(untrusted_metrics, dict) else {})
+                identifier = row.get("id")
+                correlation = row.get("correlation_id")
+                timestamp = row.get("time")
+                rows.append({
+                    "id": identifier if isinstance(identifier, str)
+                          and re.fullmatch(r"[0-9a-f]{32}", identifier) else None,
+                    "time": timestamp if isinstance(timestamp, str) and
+                            re.fullmatch(
+                                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00",
+                                timestamp) else "",
+                    "level": severity,
+                    "component": source,
+                    "code": row["code"],
+                    "message": message,
+                    "correlation_id": correlation if isinstance(correlation, str)
+                                      and re.fullmatch(r"[0-9a-f]{32}", correlation)
+                                      else None,
+                    "metrics": metrics,
+                })
     return rows[-limit:]
 
 
