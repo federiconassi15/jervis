@@ -19,7 +19,7 @@ the safe 8.1 companion behavior.
 
 ## Not implemented or verified
 
-Full event bus, memory/knowledge expansion, streaming voice, custom wake-word
+Full event bus, memory expansion, streaming voice, custom wake-word
 training, screenshot capture, persistent missions, Dev Mode tooling, workflow
 builder, plugin sandbox, Control Center 2.0 and Cloudflare relay.
 A native Android Terminal Blue UI foundation exists, but secure pairing,
@@ -43,3 +43,6 @@ write-capable features or a release. Existing local snapshots are not encrypted.
 - Performance: bounded storage, no logging from the hot audio sample callback.
 - Release: verify CI and physical-device acceptance on exact final artifacts;
   never advertise unfinished features as shipped.
+
+- Opt-in local SQLite FTS5 Knowledge Vault with incremental index/search tests.
+- Read-only authenticated Control Center operational event endpoint and UI section.
