@@ -1,0 +1,20 @@
+name: Relay unit validation (experimental)
+on:
+  pull_request:
+    paths:
+      - "relay/**"
+      - ".github/workflows/relay.yml"
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run relay validation
+        working-directory: relay
+        run: npm test
