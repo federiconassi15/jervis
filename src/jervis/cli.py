@@ -77,6 +77,11 @@ def main(argv=None) -> None:
 
     subparsers.add_parser("runtime-info")
     subparsers.add_parser("health", help="Read-only local recovery and service inventory")
+    logs_parser = subparsers.add_parser("logs", help="Read private structured operational logs")
+    logs_parser.add_argument("--level", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
+    logs_parser.add_argument("--component")
+    logs_parser.add_argument("--last", type=int, default=100)
+    logs_parser.add_argument("--json", action="store_true", dest="as_json")
     offline_parser = subparsers.add_parser("offline", help="Resolve a local command without internet")
     offline_parser.add_argument("text", nargs="+")
     offline_parser.add_argument(
@@ -237,6 +242,18 @@ def main(argv=None) -> None:
         raise SystemExit(0 if result.ok else 1)
     elif command == "health":
         print(json.dumps(health_summary(), indent=2))
+    elif command == "logs":
+        from .observability import format_event, read_events
+
+        rows = read_events(Paths.resolve().logs, level=args.level,
+                           component=args.component, limit=args.last)
+        if args.as_json:
+            print(json.dumps(rows, indent=2))
+        elif not rows:
+            print("No structured operational events recorded yet.")
+        else:
+            for row in rows:
+                print(format_event(row))
     elif command == "offline":
         intent = resolve_offline(" ".join(args.text))
         if intent is None:

@@ -22,6 +22,7 @@ from .sessions import SessionManager
 from .speaker import SpeakerRecognizer
 from .speech import AdaptiveVAD, LazyWhisper, TTS, WakeDetector
 from .state import State
+from .observability import EventJournal
 
 
 class Runtime:
@@ -60,6 +61,11 @@ class Runtime:
             privacy["max_dialogue_rows"],
             privacy["max_event_rows"],
         )
+        # Logging is operationally useful but must not stop local voice from booting.
+        try:
+            self.operational_log = EventJournal(self.paths.logs)
+        except OSError:
+            self.operational_log = None
         self.sessions = SessionManager(
             self.state,
             identity_config["trusted_session_seconds"],
@@ -759,12 +765,23 @@ class Runtime:
     def run(self) -> None:
         begin_runtime(self.paths)
         try:
+            if self.operational_log:
+                self.operational_log.emit("runtime.started")
             self._run_loop()
         except KeyboardInterrupt:
+            if self.operational_log:
+                self.operational_log.emit("runtime.stopped")
             end_runtime(self.paths)
             raise
         except BaseException:
-            # Leave the session marker unclean so the next start can detect a crash.
+            if self.operational_log:
+                self.operational_log.emit("runtime.crashed")
+            # Leave the session marker unclean so the next start detects a crash.
             raise
         else:
+            if self.operational_log:
+                self.operational_log.emit("runtime.stopped")
             end_runtime(self.paths)
+        finally:
+            if self.operational_log:
+                self.operational_log.close()
