@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 _CONTEXT = b"JERVIS-COMPANION-E2E-V1"
 _MAX_CONTENT = 32768
-_MAX_SEQUENCE = (1 << 64) - 1
+_MAX_SEQUENCE = (1 << 53) - 1
 
 
 def generate_identity() -> ec.EllipticCurvePrivateKey:

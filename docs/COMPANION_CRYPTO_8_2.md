@@ -30,3 +30,5 @@ Android's Kotlin implementation, key-store persistence, public-key pinning,
 device revocation, cross-language known-answer tests, network integration,
 message delivery/ack protocol and a full security review are **still required**.
 No private signing key, shared secret or PII belongs in source, logs or Git.
+
+The native Android Kotlin implementation now includes the same P-256/HKDF/AES-GCM protocol with a deterministic cross-language test vector. This does not yet connect Android networking, key-store persistence or pairing UX.
