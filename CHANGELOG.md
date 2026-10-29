@@ -8,6 +8,10 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 ### Added
 
+- **8.2 experimental development branch only:** bounded private structured operational
+  journal, filtered 'jervis logs' command, safe runtime lifecycle events and
+  deny-by-default scoped capability decision foundation. This is not a release.
+
 - An explicit, authenticated loopback-only read-only Control Center prototype.
 - Adaptive local responses and safe offline clock/greeting/help/diagnostics routing for the CLI and voice fast path.
 - Read-only self-healing checks, guarded POSIX permissions repair, and verified recovery archive counting.

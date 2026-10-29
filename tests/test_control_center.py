@@ -84,3 +84,41 @@ def test_port_is_always_bound_to_loopback(tmp_path):
     finally:
         # No serve_forever loop started; shutdown() would block.
         server.http.server_close()
+
+
+
+def test_control_center_logs_are_auth_scoped_and_sanitized(tmp_path):
+    from jervis.observability import EventJournal, read_events
+    from jervis.control_center import ControlCenter
+    import http.client
+    import threading
+    import json
+
+    paths = _paths(tmp_path)
+    with_logs = EventJournal(paths.logs)
+    with_logs.emit("runtime.started")
+    with_logs.close()
+    center = ControlCenter(paths=paths)
+    worker = threading.Thread(target=center.serve, daemon=True)
+    worker.start()
+    try:
+        client = http.client.HTTPConnection("127.0.0.1", center.port, timeout=3)
+        client.request("GET", "/api/logs")
+        assert client.getresponse().status == 401
+        client.close()
+        client = http.client.HTTPConnection("127.0.0.1", center.port, timeout=3)
+        # Existing authenticated session bootstrap, same as the UI.
+        client.request("GET", center.url.split("127.0.0.1:" + str(center.port))[-1])
+        reply = client.getresponse()
+        assert reply.status == 302
+        cookie = reply.getheader("Set-Cookie").split(";", 1)[0]
+        reply.read()
+        client.request("GET", "/api/logs", headers={"Cookie": cookie})
+        log_response = client.getresponse()
+        assert log_response.status == 200
+        data = json.loads(log_response.read())
+        assert data[0]["code"] == "runtime.started"
+        client.close()
+    finally:
+        center.close()
+        worker.join(timeout=3)

@@ -49,6 +49,10 @@ footer{color:var(--muted);border-top:1px solid var(--line);padding-top:20px;font
 <div class="card"><div class="label">Plugin manifests</div><div class="value" id="plugins">Checking…</div><div class="detail">Discovered only; no code executed</div></div>
 <div class="card"><div class="label">Last voice response</div><div class="value" id="latency">—</div><div class="detail">Benchmark median, if recorded</div></div>
 </div>
+<section><h2>Operational events</h2>
+<p>Private, sanitized runtime events. No transcripts, credentials or device identifiers.</p>
+<pre id="events" style="white-space:pre-wrap;overflow-wrap:anywhere;color:#b7e6d7">No events yet.</pre>
+</section>
 <section><h2>Quick commands</h2>
 <p>Run <code>jervis doctor</code> for deeper diagnostics, <code>jervis health</code>
 for local checks, or <code>jervis repair-center</code> for recovery options.
@@ -61,6 +65,13 @@ try{
 const response=await fetch('/api/overview',{credentials:'same-origin',cache:'no-store'});
 if(!response.ok)throw Error('Not authorized');
 const data=await response.json();
+const logResponse=await fetch('/api/logs',{credentials:'same-origin',cache:'no-store'});
+if(logResponse.ok){
+  const events=await logResponse.json();
+  document.getElementById('events').textContent=events.length
+    ? events.map(e=>e.time+' ['+e.level+'] '+e.message).join('\n')
+    : 'No events yet.';
+}
 for(const [id,value] of Object.entries({
 version:data.version,config:data.config_present?'Present':'Missing',
 database:data.database_present?'Present':'Missing',
@@ -163,6 +174,14 @@ class ControlCenter:
                     return
                 if path == "/":
                     self._send(HTTPStatus.OK, PAGE, "text/html; charset=utf-8")
+                elif path == "/api/logs":
+                    # Private localhost session only; source catalog prevents
+                    # arbitrary transcripts or provider output reaching the UI.
+                    from .observability import read_events
+
+                    self._send(HTTPStatus.OK,
+                               json.dumps(read_events(outer.paths.logs, limit=50)),
+                               "application/json; charset=utf-8")
                 elif path == "/api/overview":
                     now = time.monotonic()
                     with outer._cache_lock:
