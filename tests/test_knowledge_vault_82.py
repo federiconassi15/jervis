@@ -64,3 +64,15 @@ def test_query_is_data_not_fts_program(tmp_path):
         assert vault.search("alpha")[0].path == "abc.txt"
     finally:
         vault.close()
+
+
+
+def test_knowledge_index_database_is_private(tmp_path):
+    import os
+    root = tmp_path / "docs"
+    root.mkdir()
+    database = tmp_path / "index.sqlite3"
+    vault = KnowledgeVault(database, root)
+    vault.close()
+    if os.name != "nt":
+        assert database.stat().st_mode & 0o077 == 0

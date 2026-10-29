@@ -35,7 +35,12 @@ class KnowledgeVault:
         db = Path(database)
         if db.is_symlink():
             raise PermissionError("Knowledge database cannot be a symlink")
-        db.parent.mkdir(parents=True, exist_ok=True)
+        db.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if not db.exists():
+            fd = os.open(db, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            os.close(fd)
+        if os.name != "nt":
+            db.chmod(0o600)
         self.db = sqlite3.connect(db)
         try:
             self.db.execute("CREATE TABLE IF NOT EXISTS identity(root TEXT PRIMARY KEY)")
