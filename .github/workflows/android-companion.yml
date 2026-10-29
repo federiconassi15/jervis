@@ -43,3 +43,10 @@ jobs:
       - name: Test pure Android/JVM code
         working-directory: android-companion
         run: gradle :app:testDebugUnitTest --no-daemon
+      - name: Upload Terminal Blue development APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: jervis-companion-terminal-blue-dev
+          path: android-companion/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
