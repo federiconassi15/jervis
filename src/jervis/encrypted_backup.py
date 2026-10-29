@@ -186,21 +186,10 @@ def _verify_restorable_archive(path: Path) -> str:
 
 def create_encrypted_backup(destination: Path, passphrase: str,
                             *, paths: Paths | None = None) -> Path:
-    """Export a new encrypted backup, deleting its unencrypted staging snapshot."""
-    from .snapshots import create_snapshot
+    """Produce a compatible authenticated archive without plaintext disk staging."""
+    from .secure_export import create_streamed_encrypted_backup
 
-    resolved = paths or Paths.resolve()
-    resolved.ensure()
-    # Derive first so an invalid password never starts an unencrypted snapshot.
-    if len(passphrase) < 12:
-        raise ValueError("Backup passphrase must contain at least 12 characters")
-    snap = create_snapshot("encrypted-backup-staging", paths=resolved,
-                           include_binary=False)
-    plain = Path(snap.archive)
-    try:
-        return encrypt_file(plain, destination, passphrase)
-    finally:
-        plain.unlink(missing_ok=True)
+    return create_streamed_encrypted_backup(destination, passphrase, paths=paths)
 
 
 def restore_encrypted_backup(source: Path, passphrase: str,

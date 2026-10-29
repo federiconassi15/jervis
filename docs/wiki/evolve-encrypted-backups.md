@@ -27,3 +27,15 @@ removes a different replacement archive. This does **not** make all
 same-user hostile filesystem races or power-loss rollback atomic.
 The plaintext staging/export interruption issue remains an open release
 blocker and must be verified separately on physical filesystems.
+
+
+## Streaming export hardening (8.1 draft)
+
+Encrypted export streams current configuration and state directly into the
+AES-GCM-encrypted destination. There is no intermediate plaintext archive on
+disk; SQLite's consistent backup is generated in bounded memory (128 MiB limit).
+If a database is too large for that memory ceiling, export fails explicitly
+rather than silently spilling sensitive backup data onto disk. Existing state,
+ordinary recovery snapshots and guard snapshots are still unencrypted.
+Abrupt termination, filesystem faults and multi-process scenarios require
+independent real-device acceptance before release.

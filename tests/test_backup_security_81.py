@@ -134,3 +134,45 @@ def test_encrypted_restore_does_not_unlink_replaced_import(tmp_path, monkeypatch
     with pytest.raises(RuntimeError, match="racing"):
         restore_encrypted_backup(encrypted, "strong-enough backup phrase", paths=p)
     assert dest.read_bytes() == b"other owner"
+
+
+
+def test_encrypted_export_never_creates_plain_snapshot(tmp_path, monkeypatch):
+    import jervis.snapshots as snapshots
+
+    p = _paths(tmp_path)
+    (p.config / "config.json").write_text('{"name":"offline"}')
+    (p.data / "important.txt").write_text("PRIVATE-DATA-NOT-ON-DISK")
+    db = p.data / "jervis.sqlite3"
+    import sqlite3
+    with sqlite3.connect(db) as connection:
+        connection.execute("CREATE TABLE sample(data TEXT)")
+        connection.execute("INSERT INTO sample VALUES('persistent')")
+    def forbidden_snapshot(*args, **kwargs):
+        raise AssertionError("Encrypted export must not call create_snapshot")
+    monkeypatch.setattr(snapshots, "create_snapshot", forbidden_snapshot)
+    output = tmp_path / "export.jenc"
+    create_encrypted_backup(output, "strong-enough backup phrase", paths=p)
+    assert not list((p.data / "snapshots").glob("*.tar.gz"))
+    assert b"PRIVATE-DATA-NOT-ON-DISK" not in output.read_bytes()
+    assert not list(tmp_path.glob(".jervis-enc-*"))
+    from jervis.encrypted_backup import decrypt_file, _verify_restorable_archive
+    plain = tmp_path / "decrypted-in-test-only.tar.gz"
+    decrypt_file(output, plain, "strong-enough backup phrase")
+    assert _verify_restorable_archive(plain)
+
+
+def test_encrypted_export_refuses_symlinked_private_files(tmp_path):
+    p = _paths(tmp_path)
+    secret = tmp_path / "private.txt"
+    secret.write_text("do-not-follow")
+    link = p.config / "linked.txt"
+    try:
+        link.symlink_to(secret)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlinks unavailable")
+    destination = tmp_path / "export.jenc"
+    with pytest.raises(ValueError, match="symlink"):
+        create_encrypted_backup(destination, "strong-enough backup phrase", paths=p)
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".jervis-enc-*"))

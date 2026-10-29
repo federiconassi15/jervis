@@ -29,6 +29,9 @@ Release descriptions are derived from actual code diffs and mirrored in `docs/re
 
 ### Fixed
 
+- Encrypted export now streams a compatible archive directly to AES-GCM without
+  leaving an unencrypted staging snapshot on disk; SQLite backup data is bounded
+  and held in memory during export.
 - Encrypted restore imports now claim snapshot paths exclusively and avoid deleting
   a different snapshot that replaced the imported file during recovery.
 - Health inventory no longer treats corrupt snapshot filenames as valid recoverable backups.
