@@ -44,7 +44,7 @@ class MissionStore:
             os.close(fd)
         if os.name != "nt":
             path.chmod(0o600)
-        self.db = sqlite3.connect(path, timeout=5, isolation_level=None)
+        self.db = sqlite3.connect(path, timeout=5, isolation_level="DEFERRED")
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA busy_timeout=5000")
         self.db.execute("PRAGMA foreign_keys=ON")

@@ -24,10 +24,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.6.0"
+      - name: Locate installed SDK manager
+        shell: bash
+        run: |
+          SDKMGR="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMGR"
+          echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
       - name: Accept SDK licenses
-        run: yes | sdkmanager --licenses > /dev/null || true
+        run: yes | "$SDKMGR" --licenses > /dev/null || true
       - name: Install Android SDK 37
-        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+        run: '"$SDKMGR" "platforms;android-37" "build-tools;36.0.0"'
       - name: Build debug APK (do not publish)
         working-directory: android-companion
         run: gradle :app:assembleDebug --stacktrace --no-daemon
