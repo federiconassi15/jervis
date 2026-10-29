@@ -23,13 +23,13 @@ PAGE = """<!doctype html>
 <meta name="referrer" content="no-referrer">
 <title>Jervis • Control Center</title>
 <style>
-:root{color-scheme:dark;--bg:#0c0f12;--panel:#141b21;--muted:#8a9aa7;--line:#283640;--accent:#83e2bd}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 10% -5%,#203c34 0%,var(--bg) 60%);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#e8f0f1}
+:root{color-scheme:dark;--bg:#06152c;--panel:#0e2345;--muted:#91afd2;--line:#285387;--accent:#85c9ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 10% -5%,#173c76 0%,var(--bg) 60%);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#e8f0f1}
 main{max-width:1030px;margin:auto;padding:32px 20px 60px}
 header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:40px}
 .logo{font-size:24px;font-weight:800;letter-spacing:.09em}.logo span{color:var(--accent)}
 .small{color:var(--muted);font-size:13px}h1{font-size:clamp(30px,5vw,48px);line-height:1.1;margin:0 0 10px}p{color:var(--muted)}
-.pill{padding:8px 13px;border:1px solid #355748;border-radius:100px;background:#163527;color:var(--accent);font-size:13px}
+.pill{padding:8px 13px;border:1px solid #356baf;border-radius:100px;background:#102b54;color:var(--accent);font-size:13px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:14px;margin-top:28px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;min-height:122px}
 .label{font-size:13px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
@@ -49,6 +49,18 @@ footer{color:var(--muted);border-top:1px solid var(--line);padding-top:20px;font
 <div class="card"><div class="label">Plugin manifests</div><div class="value" id="plugins">Checking…</div><div class="detail">Discovered only; no code executed</div></div>
 <div class="card"><div class="label">Last voice response</div><div class="value" id="latency">—</div><div class="detail">Benchmark median, if recorded</div></div>
 </div>
+<section><h2>Mission &amp; automation activity</h2>
+<p>Aggregated local status only. No user identities, transcripts or commands are exposed.</p>
+<div class="tiles">
+<div class="card"><div class="label">Running missions</div>
+<div class="value" id="running_missions">—</div></div>
+<div class="card"><div class="label">Awaiting approval</div>
+<div class="value" id="approvals">—</div></div>
+<div class="card"><div class="label">Failed missions</div>
+<div class="value" id="failed_missions">—</div></div>
+</div>
+<div class="detail">This preview cannot start, approve or modify any operation.</div>
+</section>
 <section><h2>Operational events</h2>
 <p>Private, sanitized runtime events. No transcripts, credentials or device identifiers.</p>
 <pre id="events" style="white-space:pre-wrap;overflow-wrap:anywhere;color:#b7e6d7">No events yet.</pre>
@@ -65,6 +77,15 @@ try{
 const response=await fetch('/api/overview',{credentials:'same-origin',cache:'no-store'});
 if(!response.ok)throw Error('Not authorized');
 const data=await response.json();
+const operations=await fetch('/api/operations',{credentials:'same-origin',cache:'no-store'});
+if(operations.ok){
+  const result=await operations.json();
+  const running=result.missions?.running??0;
+  const waiting=(result.missions?.waiting_approval??0)+(result.automations?.pending_approval??0);
+  document.getElementById('running_missions').textContent=String(running);
+  document.getElementById('approvals').textContent=String(waiting);
+  document.getElementById('failed_missions').textContent=String(result.missions?.failed??0);
+}
 const logResponse=await fetch('/api/logs',{credentials:'same-origin',cache:'no-store'});
 if(logResponse.ok){
   const events=await logResponse.json();
@@ -99,6 +120,48 @@ def _overview(paths: Paths) -> dict:
     if not isinstance(median, (int, float)) or median < 0 or median > 1e8:
         median = None
     return {"version": __version__, **health, "latency_ms": median}
+
+
+
+
+def _operations_summary(paths: Paths) -> dict:
+    """Read-only bounded aggregate counts; no user ID, text or tool arguments."""
+    import sqlite3
+
+    statuses = ("queued", "running", "waiting_approval",
+                "completed", "failed", "blocked", "cancelled")
+    summary = {
+        "missions": {name: 0 for name in statuses},
+        "automations": {"pending_approval": 0},
+    }
+    mission_db = paths.data / "missions.sqlite3"
+    # A missing or untrusted database should never be created by a dashboard.
+    if mission_db.is_file() and not mission_db.is_symlink():
+        try:
+            uri = mission_db.resolve().as_uri() + "?mode=ro"
+            with sqlite3.connect(uri, uri=True, timeout=1) as db:
+                rows = db.execute(
+                    "SELECT status, COUNT(*) FROM missions GROUP BY status LIMIT 12"
+                )
+                for status, count in rows:
+                    if status in summary["missions"]:
+                        summary["missions"][status] = min(100000, int(count))
+        except (sqlite3.Error, OSError, ValueError):
+            pass
+    automation_db = paths.data / "automation.sqlite3"
+    if automation_db.is_file() and not automation_db.is_symlink():
+        try:
+            uri = automation_db.resolve().as_uri() + "?mode=ro"
+            with sqlite3.connect(uri, uri=True, timeout=1) as db:
+                row = db.execute(
+                    "SELECT COUNT(*) FROM pending_actions WHERE status='waiting_approval'"
+                ).fetchone()
+                summary["automations"]["pending_approval"] = (
+                    min(100000, int(row[0])) if row else 0
+                )
+        except (sqlite3.Error, OSError, ValueError):
+            pass
+    return summary
 
 
 class ControlCenter:
@@ -174,6 +237,12 @@ class ControlCenter:
                     return
                 if path == "/":
                     self._send(HTTPStatus.OK, PAGE, "text/html; charset=utf-8")
+                elif path == "/api/operations":
+                    # Capability is the local authenticated one-process
+                    # dashboard token. Only non-private aggregate counts.
+                    self._send(HTTPStatus.OK,
+                               json.dumps(_operations_summary(outer.paths)),
+                               "application/json; charset=utf-8")
                 elif path == "/api/logs":
                     # Private localhost session only; source catalog prevents
                     # arbitrary transcripts or provider output reaching the UI.

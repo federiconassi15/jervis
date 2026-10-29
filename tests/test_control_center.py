@@ -122,3 +122,50 @@ def test_control_center_logs_are_auth_scoped_and_sanitized(tmp_path):
     finally:
         center.close()
         worker.join(timeout=3)
+
+
+
+def test_control_center_operations_is_private_and_only_reports_counts(tmp_path):
+    import json
+    import sqlite3
+
+    from jervis.control_center import ControlCenter
+    from jervis.mission_engine import MissionStore, MissionStep
+    from jervis.capabilities import Principal
+
+    p = _paths(tmp_path)
+    missions = MissionStore(p.data / "missions.sqlite3")
+    try:
+        owner = Principal("owner", "owner", True)
+        mission = missions.create(owner, (
+            MissionStep("read", "system.status.read", "", {}, True),
+        ))
+        assert mission
+    finally:
+        missions.close()
+    with sqlite3.connect(p.data / "automation.sqlite3") as db:
+        db.execute("CREATE TABLE pending_actions(status TEXT, private_user TEXT)")
+        db.execute("INSERT INTO pending_actions VALUES('waiting_approval','sensitive')")
+    center = ControlCenter(p)
+    worker = threading.Thread(target=center.serve, daemon=True)
+    worker.start()
+    try:
+        def query(cookie=None):
+            client = http.client.HTTPConnection("127.0.0.1", center.port, timeout=3)
+            header = {"Cookie": "jervis_session=" + cookie} if cookie else {}
+            client.request("GET", "/api/operations", headers=header)
+            result = client.getresponse()
+            payload = result.read().decode()
+            status = result.status
+            client.close()
+            return status, payload
+        assert query()[0] == 401
+        code, raw = query(center.url.rsplit("/", 1)[-1])
+        assert code == 200
+        assert "sensitive" not in raw and "owner" not in raw
+        data = json.loads(raw)
+        assert data["missions"]["queued"] == 1
+        assert data["automations"]["pending_approval"] == 1
+    finally:
+        center.close()
+        worker.join(timeout=5)
