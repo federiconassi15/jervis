@@ -233,6 +233,10 @@ def restore_encrypted_backup(source: Path, passphrase: str,
                         and not destination.is_symlink()
                         and current.st_dev == owned_identity.st_dev
                         and current.st_ino == owned_identity.st_ino
-                        and current.st_ctime_ns == owned_identity.st_ctime_ns
+                        # Windows creation-time metadata can change across
+                        # descriptor/path queries; POSIX ctime also detects a
+                        # rapid inode replacement in the race regression.
+                        and (os.name == "nt" or
+                             current.st_ctime_ns == owned_identity.st_ctime_ns)
                         and current.st_size == owned_identity.st_size):
                     destination.unlink(missing_ok=True)
