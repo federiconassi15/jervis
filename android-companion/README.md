@@ -25,3 +25,5 @@ Next mandatory protocol milestones:
 5. FCM notification integration without plaintext sensitive payloads.
 6. End-to-end Android tests on Wi-Fi/mobile-data transitions, host offline,
    background restriction and certificate/identity mismatch.
+
+The optional RelayTransport class now supports an outbound-only authenticated WSS connection. It is deliberately **not invoked** from the app UI until the relay deployment, host-bound pairing, encrypted identities, revocation and Android lifecycle integration have passed acceptance. OkHttp 5.5.1 is used for TLS WebSocket transport. No token is bundled with the APK.
