@@ -13,3 +13,5 @@ Still required for a full product: trusted host lifecycle integration, a
 service-side identity/capability policy for unattended operation, editing UI,
 end-to-end persistence/migration tests, cancel/retry semantics, observability
 and physical power-loss tests. It must not fake owner login to run schedules.
+
+Windows depends on Python's official `tzdata` distribution to resolve IANA timezones; Unix systems may use their OS zone database.
