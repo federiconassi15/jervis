@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "org.jervis.companion"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.jervis.companion"

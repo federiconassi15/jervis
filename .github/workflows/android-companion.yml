@@ -11,6 +11,9 @@ jobs:
   android-build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     permissions:
       contents: read
     steps:
@@ -32,8 +35,8 @@ jobs:
           echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
       - name: Accept SDK licenses
         run: yes | "$SDKMGR" --licenses > /dev/null || true
-      - name: Install Android SDK 37
-        run: '"$SDKMGR" "platforms;android-37" "build-tools;36.0.0"'
+      - name: Install Android SDK 36
+        run: '"$SDKMGR" "platforms;android-36" "build-tools;36.0.0"'
       - name: Build debug APK (do not publish)
         working-directory: android-companion
         run: gradle :app:assembleDebug --stacktrace --no-daemon

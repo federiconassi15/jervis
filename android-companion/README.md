@@ -12,7 +12,7 @@ is deliberately disabled until the real cryptographic transport is validated.
 Do not advertise this as a completed Jervis Companion release.
 
 Development tooling: Android Gradle Plugin 9.4.1, Gradle 9.6, Kotlin Compose
-compiler plugin 2.4.21, stable Compose BOM 2026.09.00, compileSdk 37.
+compiler plugin 2.4.21, stable Compose BOM 2026.09.00, compileSdk 36.
 Android Studio/SDK and a real physical Android test device are required
 for acceptance. Build: 'gradle :app:assembleDebug' from this directory.
 
