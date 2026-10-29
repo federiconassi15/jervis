@@ -21,7 +21,9 @@ the safe 8.1 companion behavior.
 
 Full event bus, memory/knowledge expansion, streaming voice, custom wake-word
 training, screenshot capture, persistent missions, Dev Mode tooling, workflow
-builder, plugin sandbox, Control Center 2.0, Android client and Cloudflare relay.
+builder, plugin sandbox, Control Center 2.0 and Cloudflare relay.
+A native Android Terminal Blue UI foundation exists, but secure pairing,
+transport, chat, voice, notifications and device acceptance are not implemented.
 No physical microphone, installer, power-cut, Android or OS-specific acceptance
 has been performed for 8.2.
 
