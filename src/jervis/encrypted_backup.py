@@ -186,21 +186,10 @@ def _verify_restorable_archive(path: Path) -> str:
 
 def create_encrypted_backup(destination: Path, passphrase: str,
                             *, paths: Paths | None = None) -> Path:
-    """Export a new encrypted backup, deleting its unencrypted staging snapshot."""
-    from .snapshots import create_snapshot
+    """Produce a compatible authenticated archive without plaintext disk staging."""
+    from .secure_export import create_streamed_encrypted_backup
 
-    resolved = paths or Paths.resolve()
-    resolved.ensure()
-    # Derive first so an invalid password never starts an unencrypted snapshot.
-    if len(passphrase) < 12:
-        raise ValueError("Backup passphrase must contain at least 12 characters")
-    snap = create_snapshot("encrypted-backup-staging", paths=resolved,
-                           include_binary=False)
-    plain = Path(snap.archive)
-    try:
-        return encrypt_file(plain, destination, passphrase)
-    finally:
-        plain.unlink(missing_ok=True)
+    return create_streamed_encrypted_backup(destination, passphrase, paths=paths)
 
 
 def restore_encrypted_backup(source: Path, passphrase: str,
@@ -218,13 +207,36 @@ def restore_encrypted_backup(source: Path, passphrase: str,
         snapshots = resolved.data / "snapshots"
         snapshots.mkdir(mode=0o700, parents=True, exist_ok=True)
         destination = snapshots / (identifier + ".tar.gz")
-        if destination.exists() or destination.is_symlink():
-            raise FileExistsError("Snapshot with the same ID already exists")
+        # The exclusive open is the *publication* operation. A separate
+        # exists()/copy2() check races with legitimate concurrent restorers.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(destination, flags, 0o600)
+        owned_identity = None
         try:
-            # The imported plaintext is removed even when restore fails.
-            shutil.copy2(decrypted, destination)
+            with os.fdopen(fd, "wb") as target, decrypted.open("rb") as plain:
+                shutil.copyfileobj(plain, target, _CHUNK)
+                target.flush()
+                os.fsync(target.fileno())
+                owned_identity = os.fstat(target.fileno())
             restore_snapshot(identifier, paths=resolved, make_guard=True,
                              restore_binary=False)
             return identifier
         finally:
-            destination.unlink(missing_ok=True)
+            # Never unlink a different snapshot that appeared at this name
+            # after our restore, including during an exception or rollback.
+            try:
+                current = destination.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                if (owned_identity is not None
+                        and not destination.is_symlink()
+                        and current.st_dev == owned_identity.st_dev
+                        and current.st_ino == owned_identity.st_ino
+                        # Windows creation-time metadata can change across
+                        # descriptor/path queries; POSIX ctime also detects a
+                        # rapid inode replacement in the race regression.
+                        and (os.name == "nt" or
+                             current.st_ctime_ns == owned_identity.st_ctime_ns)
+                        and current.st_size == owned_identity.st_size):
+                    destination.unlink(missing_ok=True)
