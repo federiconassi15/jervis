@@ -114,7 +114,7 @@ class AutomationStore:
             for row in candidates if row["last_fired"] is None
             or current - row["last_fired"] >= row["cooldown"]
         ]
-        if dry_run:
+        if dry_run or not matches:
             return matches
         with self.db:
             receipt = self.db.execute(
